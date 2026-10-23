@@ -24,6 +24,8 @@ describe.skipIf(!enabled)("integration: OTP login, sessions and tenant isolation
   beforeEach(async () => {
     devOutbox().splice(0);
     await db().auditLog.deleteMany();
+    await db().schedule.deleteMany();
+    await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();
     await db().business.deleteMany();

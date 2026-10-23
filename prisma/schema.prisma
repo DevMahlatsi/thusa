@@ -34,6 +34,12 @@ enum Province {
   WC
 }
 
+enum Rhythm {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+}
+
 model Business {
   id                    String   @id @default(uuid())
   name                  String
@@ -47,6 +53,8 @@ model Business {
 
   users     User[]
   auditLogs AuditLog[]
+  payers    Payer[]
+  schedules Schedule[]
 }
 
 model User {
@@ -92,6 +100,53 @@ model Session {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+// A parent who pays the business. Never hard-deleted (collections and the ledger will point here);
+// archive instead.
+model Payer {
+  id             String    @id @default(uuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id])
+  parentName     String
+  childName      String
+  // AES-256-GCM, bound to businessId (src/lib/field-crypto.ts). Never store or log the plain number.
+  phoneEncrypted String
+  // Null means use the business's defaultLanguage.
+  language       Language?
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  schedule Schedule?
+
+  // Lets Schedule reference (id, businessId), so a schedule can't point at another business's payer.
+  @@unique([id, businessId])
+  @@index([businessId, archivedAt])
+}
+
+// How much a payer pays and when. One per payer; collections will copy the amount they request,
+// so editing a schedule never rewrites history.
+model Schedule {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  payerId     String
+  payer       Payer    @relation(fields: [payerId, businessId], references: [id, businessId])
+  // Per collection, in cents. CHECK > 0 in the migration.
+  amountCents Int
+  rhythm      Rhythm
+  // WEEKLY/FORTNIGHTLY: ISO weekday, 1 = Monday … 7 = Sunday.
+  // MONTHLY: day of month 1–31; shorter months use their last day. CHECKed in the migration.
+  payday      Int
+  // First day the schedule applies; fortnightly collections count from the first payday on or after it.
+  startsOn    DateTime @db.Date
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // The FK pins businessId to the payer's, so this also means one schedule per payer.
+  @@unique([payerId, businessId])
+  @@index([businessId])
 }
 
 model AuditLog {

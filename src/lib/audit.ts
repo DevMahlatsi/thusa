@@ -5,7 +5,10 @@ export type AuditAction =
   | "auth.otp_locked"
   | "auth.logout"
   | "business.created"
-  | "business.updated";
+  | "business.updated"
+  | "payer.created"
+  | "payer.updated"
+  | "payer.archived";
 
 type AuditEntry = {
   action: AuditAction;
