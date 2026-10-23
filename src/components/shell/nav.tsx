@@ -16,7 +16,7 @@ type NavEntry = {
 
 export const NAV: NavEntry[] = [
   { label: "Overview", shortLabel: "Overview", icon: OverviewIcon, href: "/dashboard", title: "Overview", inBottomNav: true },
-  { label: "Parents", shortLabel: "Parents", icon: ParentsIcon, href: null, title: "Parents", inBottomNav: true },
+  { label: "Parents", shortLabel: "Parents", icon: ParentsIcon, href: "/parents", title: "Parents", inBottomNav: true },
   { label: "Collections", shortLabel: "Collections", icon: CollectionsIcon, href: null, title: "Collections", inBottomNav: true },
   { label: "Reminders", shortLabel: "Reminders", icon: RemindersIcon, href: null, title: "Reminders", inBottomNav: false },
   {
