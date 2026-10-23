@@ -1,6 +1,6 @@
 // Runs against a real, migrated Postgres. Set TEST_DATABASE_URL to enable:
 //   TEST_DATABASE_URL=postgresql://... npx prisma migrate deploy && npm test
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const enabled = Boolean(process.env.TEST_DATABASE_URL);
 
@@ -61,6 +61,53 @@ describe.skipIf(!enabled)("integration: OTP login, sessions and tenant isolation
   it("rate-limits repeated code requests", async () => {
     await requestOtp(phoneA, "10.0.0.1");
     await expect(requestOtp(phoneA, "10.0.0.1")).rejects.toMatchObject({ status: 429 });
+  });
+
+  describe("judges' demo login", () => {
+    const demoPhone = "+27600000000";
+
+    beforeEach(() => {
+      process.env.DEMO_PHONE = "060 000 0000";
+      process.env.DEMO_OTP = "123456";
+    });
+    afterEach(() => {
+      delete process.env.DEMO_PHONE;
+      delete process.env.DEMO_OTP;
+    });
+
+    it("gives the demo number the fixed code, sends no SMS and allows it once", async () => {
+      await requestOtp(demoPhone, "10.0.0.1");
+      expect(devOutbox()).toHaveLength(0);
+      expect((await verifyOtp(demoPhone, "123456")).phoneE164).toBe(demoPhone);
+      await expect(verifyOtp(demoPhone, "123456")).rejects.toMatchObject({ status: 400 });
+    });
+
+    it("lets several judges request codes back to back", async () => {
+      await requestOtp(demoPhone, "10.0.0.1");
+      await requestOtp(demoPhone, "10.0.0.2");
+      await requestOtp(demoPhone, "10.0.0.3");
+      await requestOtp(demoPhone, "10.0.0.4");
+      expect((await verifyOtp(demoPhone, "123456")).phoneE164).toBe(demoPhone);
+    });
+
+    it("never accepts the fixed code for any other number", async () => {
+      await requestOtp(phoneA, "10.0.0.1");
+      expect(latestCode()).toMatch(/^\d{6}$/);
+      if (latestCode() !== "123456") {
+        await expect(verifyOtp(phoneA, "123456")).rejects.toMatchObject({ status: 400 });
+      }
+    });
+
+    it("is off when the variables are removed", async () => {
+      delete process.env.DEMO_PHONE;
+      delete process.env.DEMO_OTP;
+      await requestOtp(demoPhone, "10.0.0.1");
+      expect(devOutbox()).toHaveLength(1);
+      const code = latestCode();
+      if (code !== "123456") {
+        await expect(verifyOtp(demoPhone, "123456")).rejects.toMatchObject({ status: 400 });
+      }
+    });
   });
 
   it("revoked sessions stop working", async () => {

@@ -3,8 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { sendJson } from "@/components/api-client";
+import { normaliseSaMobile } from "@/lib/phone";
 
-export function LoginForm({ showDevOutbox }: { showDevOutbox: boolean }) {
+type Demo = { phone: string; phoneE164: string; code: string };
+
+export function LoginForm({ showDevOutbox, demo }: { showDevOutbox: boolean; demo: Demo | null }) {
   const router = useRouter();
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [phone, setPhone] = useState("");
@@ -12,6 +15,7 @@ export function LoginForm({ showDevOutbox }: { showDevOutbox: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const isDemo = demo !== null && normaliseSaMobile(phone) === demo.phoneE164;
 
   async function requestCode(e?: React.FormEvent) {
     e?.preventDefault();
@@ -21,7 +25,11 @@ export function LoginForm({ showDevOutbox }: { showDevOutbox: boolean }) {
       await sendJson("/api/auth/otp/request", "POST", { phone });
       setStep("code");
       setCode("");
-      setNotice("We sent a 6-digit code by SMS. It expires in 5 minutes.");
+      setNotice(
+        isDemo
+          ? `Demo account: your code is ${demo.code}.`
+          : "We sent a 6-digit code by SMS. It expires in 5 minutes.",
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -72,6 +80,25 @@ export function LoginForm({ showDevOutbox }: { showDevOutbox: boolean }) {
           <button type="submit" className="block" disabled={busy}>
             {busy ? "Sending…" : "Send me a code"}
           </button>
+          {demo && (
+            <div className="demo-note">
+              <p>
+                <strong>Judging Thusa?</strong> Use the demo account: <span className="num">{demo.phone}</span>,
+                code <span className="num">{demo.code}</span>.
+              </p>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setPhone(demo.phone);
+                  setError(null);
+                }}
+                disabled={busy}
+              >
+                Use demo number
+              </button>
+            </div>
+          )}
         </form>
       ) : (
         <form className="stack" onSubmit={verifyCode}>
@@ -122,7 +149,7 @@ export function LoginForm({ showDevOutbox }: { showDevOutbox: boolean }) {
               Use a different number
             </button>
           </div>
-          {showDevOutbox && (
+          {showDevOutbox && !isDemo && (
             <p className="muted small">
               Dev mode: no SMS is sent. Find the code in the{" "}
               <a href="/dev/outbox" target="_blank">
@@ -133,7 +160,6 @@ export function LoginForm({ showDevOutbox }: { showDevOutbox: boolean }) {
           )}
         </form>
       )}
-      
     </div>
   );
 }

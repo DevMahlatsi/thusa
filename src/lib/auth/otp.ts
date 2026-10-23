@@ -5,6 +5,7 @@ import { db } from "../db";
 import { HttpError } from "../http";
 import { logger } from "../logger";
 import { generateOtp, hashOtp, hmac, otpMatches } from "./crypto";
+import { demoLogin } from "./demo";
 
 export const OTP_TTL_MINUTES = 5;
 export const OTP_MAX_ATTEMPTS = 3;
@@ -24,6 +25,8 @@ export async function requestOtp(phoneE164: string, ip: string): Promise<void> {
   const now = Date.now();
   const ipHash = hmac(`ip:${ip}`);
   const since = (ms: number) => ({ gte: new Date(now - ms) });
+  const demo = demoLogin();
+  const isDemo = demo?.phoneE164 === phoneE164;
 
   const [lastForPhone, phone15Min, phoneDay, ipHour] = await Promise.all([
     db().otpChallenge.findFirst({ where: { phoneE164, createdAt: since(LIMITS.cooldownMs) } }),
@@ -31,13 +34,16 @@ export async function requestOtp(phoneE164: string, ip: string): Promise<void> {
     db().otpChallenge.count({ where: { phoneE164, createdAt: since(24 * 60 * MINUTE) } }),
     db().otpChallenge.count({ where: { ipHash, createdAt: since(60 * MINUTE) } }),
   ]);
-  if (lastForPhone || phone15Min >= LIMITS.perPhone15Min || phoneDay >= LIMITS.perPhoneDay || ipHour >= LIMITS.perIpHour) {
+  // Several judges share the demo number, so it skips the per-phone limits (the per-IP limit still applies).
+  const phoneLimited =
+    !isDemo && (Boolean(lastForPhone) || phone15Min >= LIMITS.perPhone15Min || phoneDay >= LIMITS.perPhoneDay);
+  if (phoneLimited || ipHour >= LIMITS.perIpHour) {
     logger.warn("auth.otp_rate_limited", { phone: phoneE164 });
     throw tooMany();
   }
 
   const id = randomUUID();
-  const code = generateOtp();
+  const code = isDemo ? demo.code : generateOtp();
   await db().otpChallenge.create({
     data: {
       id,
@@ -47,6 +53,11 @@ export async function requestOtp(phoneE164: string, ip: string): Promise<void> {
       expiresAt: new Date(now + OTP_TTL_MINUTES * MINUTE),
     },
   });
+
+  if (isDemo) {
+    logger.info("auth.otp_demo_issued", { phone: phoneE164 });
+    return;
+  }
 
   try {
     // Owners haven't chosen a language before logging in, so the login code goes out in English.

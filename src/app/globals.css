@@ -689,6 +689,22 @@ fieldset {
   margin-bottom: 1rem;
 }
 
+/* Judges' demo login hint on the login page. */
+.demo-note {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background: var(--canvas);
+  border: 1px dashed var(--field-border);
+  border-radius: var(--radius-control);
+  font-size: 0.875rem;
+}
+
+.demo-note button {
+  align-self: flex-start;
+}
+
 .sample-banner {
   display: flex;
   align-items: flex-start;
