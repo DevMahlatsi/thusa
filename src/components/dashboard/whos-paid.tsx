@@ -34,7 +34,7 @@ export function WhosPaid({ parents, isSample }: { parents: ParentSummary[]; isSa
       </div>
       <ul className="people">
         {parents.slice(0, VISIBLE_ROWS).map((p) => (
-          <li key={p.parentName}>
+          <li key={p.payerId}>
             <span className="avatar" aria-hidden="true">
               {initials(p.parentName)}
             </span>

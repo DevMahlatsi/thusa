@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeKpis, summariseParents, weeklyBuckets, type CollectionRow } from "@/lib/dashboard";
+import { computeKpis, projectSchedules, summariseParents, weeklyBuckets, type CollectionRow } from "@/lib/dashboard";
 import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections } from "@/lib/sample-dashboard";
 
 const row = (over: Partial<CollectionRow>): CollectionRow => ({
   id: "1",
+  payerId: "p",
   parentName: "P",
   childName: "C",
   reference: "R",
@@ -54,10 +55,10 @@ describe("summariseParents", () => {
   it("shows the worst status due so far and sorts problems first", () => {
     const list = summariseParents(
       [
-        row({ parentName: "Paid" }),
-        row({ parentName: "Failed", status: "FAILED", paidCents: 0 }),
-        row({ parentName: "Upcoming", dueDate: "2026-10-30", status: "PENDING", paidCents: 0 }),
-        row({ parentName: "Partial", status: "PARTIAL", paidCents: 5_000 }),
+        row({ payerId: "1", parentName: "Paid" }),
+        row({ payerId: "2", parentName: "Failed", status: "FAILED", paidCents: 0 }),
+        row({ payerId: "3", parentName: "Upcoming", dueDate: "2026-10-30", status: "PENDING", paidCents: 0 }),
+        row({ payerId: "4", parentName: "Partial", status: "PARTIAL", paidCents: 5_000 }),
       ],
       "2026-10-23",
     );
@@ -66,6 +67,41 @@ describe("summariseParents", () => {
       ["Partial", "PARTIAL"],
       ["Upcoming", "PENDING"],
       ["Paid", "PAID"],
+    ]);
+  });
+
+  it("keeps two parents with the same name apart", () => {
+    const list = summariseParents(
+      [row({ payerId: "1", parentName: "Thandi" }), row({ payerId: "2", parentName: "Thandi", status: "FAILED", paidCents: 0 })],
+      "2026-10-23",
+    );
+    expect(list.map((p) => [p.payerId, p.status])).toEqual([
+      ["2", "FAILED"],
+      ["1", "PAID"],
+    ]);
+  });
+});
+
+describe("projectSchedules", () => {
+  const payers = [
+    { id: "a", parentName: "A", childName: "a", schedule: { amountCents: 30_000, rhythm: "WEEKLY" as const, payday: 5, startsOn: "2026-01-01" } },
+    { id: "b", parentName: "B", childName: "b", schedule: { amountCents: 125_000, rhythm: "MONTHLY" as const, payday: 25, startsOn: "2026-01-01" } },
+    { id: "c", parentName: "C", childName: "c", schedule: null },
+  ];
+
+  it("expects each schedule's amount on each due date, with nothing received yet", () => {
+    const rows = projectSchedules(payers, 2026, 10);
+    expect(rows).toHaveLength(6);
+    expect(rows.every((r) => r.status === "PENDING" && r.paidCents === 0 && r.reference === "")).toBe(true);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
+    expect(computeKpis(rows, "2026-10-23")).toMatchObject({ expectedCents: 5 * 30_000 + 125_000, receivedCents: 0 });
+  });
+
+  it("puts every parent with a schedule in Who's paid, nobody up to date yet", () => {
+    const list = summariseParents(projectSchedules(payers, 2026, 10), "2026-10-23");
+    expect(list.map((p) => [p.payerId, p.status, p.expectedCents])).toEqual([
+      ["a", "PENDING", 4 * 30_000],
+      ["b", "PENDING", 0],
     ]);
   });
 });

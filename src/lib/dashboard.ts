@@ -1,11 +1,13 @@
 // Dashboard view model. Pure functions over collection rows, so the same maths serves the sample
-// preview now and real collections later (demo priorities 2–4). All money is integer cents.
+// preview, schedules projected onto this month, and real collections later. All money is integer cents.
+import { dueDatesInMonth } from "./schedule-dates";
 
 export type Rhythm = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
 export type CollectionStatus = "PENDING" | "PAID" | "PARTIAL" | "FAILED";
 
 export type CollectionRow = {
   id: string;
+  payerId: string;
   parentName: string;
   childName: string;
   reference: string;
@@ -36,6 +38,7 @@ export type WeekBucket = {
 };
 
 export type ParentSummary = {
+  payerId: string;
   parentName: string;
   childName: string;
   rhythm: Rhythm;
@@ -91,7 +94,7 @@ const STATUS_PRIORITY: Record<CollectionStatus, number> = { FAILED: 0, PARTIAL: 
  */
 export function summariseParents(rows: CollectionRow[], today: string): ParentSummary[] {
   const byParent = new Map<string, CollectionRow[]>();
-  for (const row of rows) byParent.set(row.parentName, [...(byParent.get(row.parentName) ?? []), row]);
+  for (const row of rows) byParent.set(row.payerId, [...(byParent.get(row.payerId) ?? []), row]);
 
   const summaries = [...byParent.values()].map((parentRows): ParentSummary => {
     const first = parentRows[0]!;
@@ -101,6 +104,7 @@ export function summariseParents(rows: CollectionRow[], today: string): ParentSu
       "PAID",
     );
     return {
+      payerId: first.payerId,
       parentName: first.parentName,
       childName: first.childName,
       rhythm: first.rhythm,
@@ -112,6 +116,37 @@ export function summariseParents(rows: CollectionRow[], today: string): ParentSu
 
   return summaries.sort(
     (a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status] || a.parentName.localeCompare(b.parentName),
+  );
+}
+
+export type ScheduledPayer = {
+  id: string;
+  parentName: string;
+  childName: string;
+  schedule: { amountCents: number; rhythm: Rhythm; payday: number; startsOn: string } | null;
+};
+
+/**
+ * What each schedule expects this month, before any payment request exists: one PENDING row per due
+ * date with nothing paid. The amount comes from the stored schedule. No reference until one is sent.
+ */
+export function projectSchedules(payers: ScheduledPayer[], year: number, month: number): CollectionRow[] {
+  return payers.flatMap(({ id, parentName, childName, schedule }) =>
+    schedule
+      ? dueDatesInMonth(schedule, year, month).map((dueDate) => ({
+          id: `${id}:${dueDate}`,
+          payerId: id,
+          parentName,
+          childName,
+          reference: "",
+          rhythm: schedule.rhythm,
+          dueDate,
+          amountCents: schedule.amountCents,
+          paidCents: 0,
+          status: "PENDING" as const,
+          paidOnTime: false,
+        }))
+      : [],
   );
 }
 

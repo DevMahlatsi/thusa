@@ -46,6 +46,7 @@ export function sampleCollections(): CollectionRow[] {
       const hasIssue = isDue && d === lastDue ? p.issue : undefined;
       const base = {
         id: `sample-${p.letter}-${d}`,
+        payerId: `sample-${p.letter}`,
         parentName: `Parent ${p.letter}`,
         childName: `Child ${p.letter}`,
         reference: `SAMPLE-${p.letter}${String(d).padStart(2, "0")}`,

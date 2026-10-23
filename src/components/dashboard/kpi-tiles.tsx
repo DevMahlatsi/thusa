@@ -3,7 +3,8 @@ import { formatRand } from "@/lib/money";
 
 const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
 
-export function KpiTiles({ kpis }: { kpis: Kpis }) {
+// onTimeNote replaces the on-time sub-label, e.g. before any payment request has been sent.
+export function KpiTiles({ kpis, onTimeNote }: { kpis: Kpis; onTimeNote?: string }) {
   const receivedShare = kpis.expectedCents ? kpis.receivedCents / kpis.expectedCents : 0;
   const tiles = [
     { label: "Expected", value: formatRand(kpis.expectedCents), sub: "This month, from all schedules" },
@@ -12,7 +13,7 @@ export function KpiTiles({ kpis }: { kpis: Kpis }) {
     {
       label: "On-time rate",
       value: kpis.onTimeRate === null ? "–" : percent(kpis.onTimeRate),
-      sub: `Of ${kpis.dueSoFar} payments due so far`,
+      sub: onTimeNote ?? `Of ${kpis.dueSoFar} payments due so far`,
     },
   ];
   return (
