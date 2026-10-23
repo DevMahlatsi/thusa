@@ -1,0 +1,108 @@
+// Thusa data model. Money is always integer cents. Every business-owned row carries businessId.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  STAFF
+  READONLY
+}
+
+enum Language {
+  en
+  zu
+  st
+  tn
+}
+
+enum Province {
+  EC
+  FS
+  GP
+  KZN
+  LP
+  MP
+  NC
+  NW
+  WC
+}
+
+model Business {
+  id                    String   @id @default(uuid())
+  name                  String
+  town                  String?
+  province              Province
+  ecdRegistrationNumber String?
+  // Default language for messages to parents; each payer can override later.
+  defaultLanguage       Language @default(en)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  users     User[]
+  auditLogs AuditLog[]
+}
+
+model User {
+  id          String    @id @default(uuid())
+  phoneE164   String    @unique
+  name        String?
+  role        Role      @default(OWNER)
+  // Null until the owner completes onboarding.
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id])
+  createdAt   DateTime  @default(now())
+  lastLoginAt DateTime?
+
+  sessions Session[]
+
+  @@index([businessId])
+}
+
+model OtpChallenge {
+  id         String    @id
+  phoneE164  String
+  // HMAC-SHA256 of challengeId + code. The code itself is never stored.
+  codeHash   String
+  // HMAC of the client IP, for rate limiting without storing the raw IP.
+  ipHash     String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phoneE164, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  // SHA-256 of the cookie token. The raw token only lives in the browser cookie.
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String    @id @default(uuid())
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
+  userId     String?
+  action     String
+  // Never put PII (phone numbers, account numbers, codes) in metadata.
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([businessId, createdAt])
+}

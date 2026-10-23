@@ -1,0 +1,14 @@
+# Local Postgres for development: `npm run db:up`
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: thusa
+      POSTGRES_PASSWORD: thusa_local_only
+      POSTGRES_DB: thusa
+    ports:
+      - "5432:5432"
+    volumes:
+      - thusa-db:/var/lib/postgresql/data
+volumes:
+  thusa-db:

@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+coverage/
+.env
+.env.*
+!.env.example
+
+# AI assistant files (kept local, not published)
+.claude/
+CLAUDE.md
+AGENTS.md
+*.pem
+*.key
+secrets/
+.vercel/
+.DS_Store
+
+# Prisma generated client
+src/generated/
+next-env.d.ts
+*.tsbuildinfo
