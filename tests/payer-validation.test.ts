@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_AMOUNT_CENTS, payerInputSchema, todayInSa } from "@/lib/payers";
+import { MAX_AMOUNT_CENTS, payerIdSchema, payerInputSchema, payerUpdateSchema, todayInSa } from "@/lib/payers";
 
 const schedule = { amountCents: 12_500, rhythm: "WEEKLY", payday: 5 };
 const valid = { parentName: "Thandi Mokoena", childName: "Lerato", phone: "082 123 4567", language: "st", schedule };
@@ -67,5 +67,27 @@ describe("todayInSa", () => {
   it("uses South African time, not UTC", () => {
     expect(todayInSa(new Date("2026-10-31T22:30:00Z"))).toBe("2026-11-01");
     expect(todayInSa(new Date("2026-10-31T21:59:00Z"))).toBe("2026-10-31");
+  });
+});
+
+describe("payerUpdateSchema", () => {
+  it("keeps the stored phone when it's left out", () => {
+    expect(payerUpdateSchema.parse({ ...valid, phone: undefined }).phone).toBeUndefined();
+  });
+
+  it("still validates a phone that is given", () => {
+    expect(payerUpdateSchema.parse(valid).phone).toBe("+27821234567");
+    expect(payerUpdateSchema.safeParse({ ...valid, phone: "12345" }).success).toBe(false);
+  });
+
+  it("rejects a smuggled businessId", () => {
+    expect(payerUpdateSchema.safeParse({ ...valid, businessId: "someone-elses" }).success).toBe(false);
+  });
+});
+
+describe("payerIdSchema", () => {
+  it("only accepts UUIDs", () => {
+    expect(payerIdSchema.safeParse("0b6f1c3e-6f1a-4b8e-9a51-3c2d4e5f6a7b").success).toBe(true);
+    expect(payerIdSchema.safeParse("../business").success).toBe(false);
   });
 });

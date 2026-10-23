@@ -65,6 +65,13 @@ export const payerInputSchema = z.strictObject({
 
 export type PayerInput = z.infer<typeof payerInputSchema>;
 
+// Editing: leave the phone out to keep the stored number. The edit form only ever sees it masked.
+export const payerUpdateSchema = payerInputSchema.extend({ phone: saMobileSchema.optional() });
+
+export type PayerUpdate = z.infer<typeof payerUpdateSchema>;
+
+export const payerIdSchema = z.uuid();
+
 type Ctx = { userId: string; businessId: string };
 
 const phoneContext = (businessId: string) => `payer.phone:${businessId}`;
@@ -116,14 +123,15 @@ export async function getPayer(businessId: string, payerId: string) {
   return db().payer.findFirst({ where: { id: payerId, businessId }, include: { schedule: true } });
 }
 
-export async function updatePayer(ctx: Ctx, payerId: string, input: PayerInput) {
+export async function updatePayer(ctx: Ctx, payerId: string, input: PayerUpdate) {
   const payer = await db().$transaction(async (tx) => {
+    // Archived payers can't be edited: they're gone from lists and collections.
     const updated = await tx.payer.updateMany({
-      where: { id: payerId, businessId: ctx.businessId },
+      where: { id: payerId, businessId: ctx.businessId, archivedAt: null },
       data: {
         parentName: input.parentName,
         childName: input.childName,
-        phoneEncrypted: encryptField(input.phone, phoneContext(ctx.businessId)),
+        ...(input.phone && { phoneEncrypted: encryptField(input.phone, phoneContext(ctx.businessId)) }),
         language: input.language,
       },
     });
@@ -136,7 +144,12 @@ export async function updatePayer(ctx: Ctx, payerId: string, input: PayerInput) 
     });
     return tx.payer.findFirstOrThrow({ where: { id: payerId, businessId: ctx.businessId }, include: { schedule: true } });
   });
-  await audit({ action: "payer.updated", userId: ctx.userId, businessId: ctx.businessId, metadata: { payerId } });
+  await audit({
+    action: "payer.updated",
+    userId: ctx.userId,
+    businessId: ctx.businessId,
+    metadata: { payerId, phoneChanged: Boolean(input.phone) },
+  });
   return payer;
 }
 

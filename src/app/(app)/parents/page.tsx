@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ParentsIcon } from "@/components/icons";
 import { requirePageBusinessUser } from "@/lib/auth";
 import { getBusiness } from "@/lib/business";
@@ -8,17 +9,17 @@ import { formatRand } from "@/lib/money";
 import { listPayers, toPayerDto } from "@/lib/payers";
 import { formatPayday } from "@/lib/schedule-format";
 
-// Disabled until the add/edit form exists (roadmap step 5); never a dead link.
 function AddParentButton() {
   return (
-    <button type="button" aria-disabled="true" title="Coming soon">
+    <Link href="/parents/new" className="button">
       Add parent
-    </button>
+    </Link>
   );
 }
 
 export default async function ParentsPage() {
-  const { businessId } = await requirePageBusinessUser();
+  const { businessId, role } = await requirePageBusinessUser();
+  const canEdit = role !== "READONLY";
   const [business, payers] = await Promise.all([getBusiness(businessId), listPayers(businessId)]);
   const defaultLanguage = business?.defaultLanguage ?? "en";
   const rows = payers
@@ -36,8 +37,7 @@ export default async function ParentsPage() {
           Add each parent once with their child, phone number, fee and payday. Thusa then asks them to pay on that day,
           every week, fortnight or month.
         </p>
-        <AddParentButton />
-        <p className="muted small">Adding parents opens in the next update.</p>
+        {canEdit ? <AddParentButton /> : <p className="muted small">Only the owner or staff can add parents.</p>}
       </section>
     );
   }
@@ -49,7 +49,7 @@ export default async function ParentsPage() {
           <h2 id="parents-title">Parents</h2>
           <p className="subtitle">Everyone Thusa collects fees from</p>
         </div>
-        <AddParentButton />
+        {canEdit && <AddParentButton />}
       </div>
       <p className="figure">
         {rows.length} <span className="figure-of">{rows.length === 1 ? "parent" : "parents"}</span>
@@ -66,6 +66,11 @@ export default async function ParentsPage() {
               <th scope="col" className="right">
                 Amount
               </th>
+              {canEdit && (
+                <th scope="col" className="right">
+                  <span className="sr-only">Action</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -104,6 +109,13 @@ export default async function ParentsPage() {
                       <span className="muted">–</span>
                     )}
                   </td>
+                  {canEdit && (
+                    <td data-col="action" className="right">
+                      <Link href={`/parents/${p.id}/edit`} className="button secondary small">
+                        Edit<span className="sr-only"> {p.parentName}</span>
+                      </Link>
+                    </td>
+                  )}
                 </tr>
               );
             })}

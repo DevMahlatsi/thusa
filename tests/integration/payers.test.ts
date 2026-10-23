@@ -87,6 +87,21 @@ describe.skipIf(!enabled)("integration: payers, schedules and tenant isolation",
     expect(await db().schedule.count()).toBe(1);
   });
 
+  it("keeps the stored phone when an update leaves it out", async () => {
+    const payer = await createPayer(a, input);
+    const updated = await updatePayer(a, payer.id, { ...input, phone: undefined, childName: "Lerato M" });
+    expect(updated.childName).toBe("Lerato M");
+    expect(payerPhone(updated)).toBe("+27821234567");
+    const log = await db().auditLog.findFirstOrThrow({ where: { action: "payer.updated" } });
+    expect(log.metadata).toEqual({ payerId: payer.id, phoneChanged: false });
+  });
+
+  it("won't edit an archived payer", async () => {
+    const payer = await createPayer(a, input);
+    await archivePayer(a, payer.id);
+    await expect(updatePayer(a, payer.id, input)).rejects.toMatchObject({ status: 404 });
+  });
+
   it("archives instead of deleting", async () => {
     const payer = await createPayer(a, input);
     await archivePayer(a, payer.id);

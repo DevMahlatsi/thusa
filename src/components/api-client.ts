@@ -1,5 +1,5 @@
 // Small fetch helper for client components. Errors from the API are already user-friendly.
-export async function sendJson<T = unknown>(url: string, method: "POST" | "PATCH", body?: unknown): Promise<T> {
+export async function sendJson<T = unknown>(url: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, {

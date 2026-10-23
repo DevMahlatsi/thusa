@@ -14,17 +14,19 @@ export class HttpError extends Error {
 export const unauthorised = () => new HttpError(401, "Please log in again.");
 export const forbidden = () => new HttpError(403, "You don't have permission to do that.");
 
-type Handler = (req: Request) => Promise<Response>;
+// Ctx is Next's second route argument, e.g. { params: Promise<{ id: string }> } for dynamic routes.
+// It's optional on the wrapped route so tests can call it with just a request.
+type Handler<Ctx> = (req: Request, ctx: Ctx) => Promise<Response>;
 
 /**
  * Wraps an API route: rejects cross-site mutations (CSRF), turns HttpErrors into
  * generic JSON errors and logs unexpected failures through the PII-masking logger.
  */
-export function apiRoute(handler: Handler): Handler {
-  return async (req) => {
+export function apiRoute<Ctx = unknown>(handler: Handler<Ctx>): (req: Request, ctx?: Ctx) => Promise<Response> {
+  return async (req, ctx) => {
     try {
       if (req.method !== "GET" && req.method !== "HEAD") assertSameOrigin(req);
-      return await handler(req);
+      return await handler(req, ctx as Ctx);
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json({ error: err.publicMessage }, { status: err.status });
