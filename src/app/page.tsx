@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Wordmark } from "@/components/brand";
 import { WhosPaid } from "@/components/dashboard/whos-paid";
 import { CollectionsIcon, InfoIcon, OverviewIcon, ParentsIcon, RemindersIcon } from "@/components/icons";
+import { PublicHeader } from "@/components/public-header";
 import { getCurrentUser } from "@/lib/auth";
 import { demoLogin } from "@/lib/auth/demo";
 import { summariseParents } from "@/lib/dashboard";
@@ -84,21 +84,14 @@ export default async function Home() {
 
   return (
     <div className="landing">
-      <header className="landing-header">
-        <div className="landing-wrap landing-bar">
-          <Link href="/" className="logo" aria-label="Thusa home">
-            <Wordmark height={28} />
-          </Link>
-          <nav className="landing-actions" aria-label="Account">
-            <Link href="/login" className="button secondary small">
-              Log in
-            </Link>
-            <Link href="/login" className="button small">
-              Try the demo
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <PublicHeader>
+        <Link href="/login" className="button secondary small">
+          Log in
+        </Link>
+        <Link href="/login" className="button small">
+          Try the demo
+        </Link>
+      </PublicHeader>
 
       <main>
         <section className="landing-wrap hero" aria-labelledby="hero-title">

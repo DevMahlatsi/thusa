@@ -415,30 +415,188 @@ fieldset {
 
 /* ---- Auth pages (login, onboarding) ---- */
 
-.auth {
+.auth-page {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 2.5rem 1rem;
-  gap: 2rem;
 }
 
-.auth .panel {
+.auth {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 4rem;
   width: 100%;
-  max-width: 420px;
-  padding: 2rem 1.75rem;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2.5rem 1rem;
 }
 
-.auth.wide .panel {
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 440px;
+}
+
+.auth.wide .auth-form {
   max-width: 600px;
+}
+
+.auth-form > .panel {
+  width: 100%;
+  padding: 2rem 1.75rem;
 }
 
 .auth-footer {
   color: var(--muted);
   font-size: 0.8125rem;
   text-align: center;
-  max-width: 420px;
+}
+
+.form-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+}
+
+/* "or" with a rule either side. */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+/* Judges' demo login. */
+.demo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.demo-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.demo-card h2 {
+  font-size: 0.9375rem;
+}
+
+.demo-details {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.demo-details div {
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  min-width: 0;
+}
+
+.demo-details dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.demo-details dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.auth-aside {
+  display: none;
+}
+
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.aside-title {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.trust {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.trust li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.trust-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text);
+}
+
+@media (min-width: 1024px) {
+  /* Top-aligned, so the form doesn't jump when the code step replaces the phone step. */
+  .auth {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+
+  .auth-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    flex: 1;
+    max-width: 480px;
+  }
+
+  /* The aside repeats the footer's promises as trust points. */
+  .auth.with-aside .auth-footer {
+    display: none;
+  }
 }
 
 @media (max-width: 480px) {
@@ -446,7 +604,7 @@ fieldset {
     padding-top: 1.5rem;
   }
 
-  .auth .panel {
+  .auth-form > .panel {
     padding: 1.5rem 1.25rem;
   }
 }
@@ -974,22 +1132,6 @@ fieldset {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
-}
-
-/* Judges' demo login hint on the login page. */
-.demo-note {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.85rem 1rem;
-  background: var(--canvas);
-  border: 1px dashed var(--field-border);
-  border-radius: var(--radius-control);
-  font-size: 0.875rem;
-}
-
-.demo-note button {
-  align-self: flex-start;
 }
 
 .sample-banner {

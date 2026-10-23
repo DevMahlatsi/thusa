@@ -15,21 +15,24 @@ export function LoginForm({ showDevOutbox, demo }: { showDevOutbox: boolean; dem
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const isDemo = demo !== null && normaliseSaMobile(phone) === demo.phoneE164;
+  const isDemoPhone = (p: string) => demo !== null && normaliseSaMobile(p) === demo.phoneE164;
+  const isDemo = isDemoPhone(phone);
 
-  async function requestCode(e?: React.FormEvent) {
-    e?.preventDefault();
+  // The demo button passes the demo number directly, since state from setPhone isn't visible yet.
+  async function requestCode(forPhone = phone) {
     setBusy(true);
     setError(null);
     try {
-      await sendJson("/api/auth/otp/request", "POST", { phone });
+      await sendJson("/api/auth/otp/request", "POST", { phone: forPhone });
       setStep("code");
-      setCode("");
-      setNotice(
-        isDemo
-          ? `Demo account: your code is ${demo.code}.`
-          : "We sent a 6-digit code by SMS. It expires in 5 minutes.",
-      );
+      if (demo && isDemoPhone(forPhone)) {
+        // The demo code is printed on this page anyway; filling it in saves judges a step.
+        setCode(demo.code);
+        setNotice("Demo account: the code is filled in for you. Press Log in.");
+      } else {
+        setCode("");
+        setNotice("We sent a 6-digit code by SMS. It expires in 5 minutes.");
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -51,114 +54,146 @@ export function LoginForm({ showDevOutbox, demo }: { showDevOutbox: boolean; dem
     }
   }
 
+  if (step === "code") {
+    return (
+      <form className="stack" onSubmit={verifyCode}>
+        <div className="form-heading">
+          <h1>Enter your code</h1>
+          <p className="muted">
+            Sent to <span className="num">{phone}</span>
+          </p>
+        </div>
+        {notice && (
+          <p className="message" role="status">
+            {notice}
+          </p>
+        )}
+        <div>
+          <label htmlFor="code">6-digit code</label>
+          <input
+            id="code"
+            className="code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="\d{6}"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            autoFocus
+            required
+          />
+        </div>
+        {error && (
+          <p className="message problem" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="block" disabled={busy || code.length !== 6}>
+          {busy ? "Checking…" : "Log in"}
+        </button>
+        <div className="form-links">
+          <button type="button" className="link" onClick={() => requestCode()} disabled={busy}>
+            Send a new code
+          </button>
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              setStep("phone");
+              setError(null);
+            }}
+            disabled={busy}
+          >
+            Use a different number
+          </button>
+        </div>
+        {showDevOutbox && !isDemo && (
+          <p className="muted small">
+            Dev mode: no SMS is sent. Find the code in the{" "}
+            <a href="/dev/outbox" target="_blank">
+              dev outbox
+            </a>
+            .
+          </p>
+        )}
+      </form>
+    );
+  }
+
   return (
     <div className="stack">
-      {step === "phone" ? (
-        <form className="stack" onSubmit={requestCode}>
-          <h1>Log in</h1>
-          <div>
-            <label htmlFor="phone">
-              Cellphone number
-              <span className="hint">We&apos;ll SMS you a code. No password needed.</span>
-            </label>
-            <input
-              id="phone"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="082 123 4567"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
-          </div>
-          {error && (
-            <p className="message problem" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" className="block" disabled={busy}>
-            {busy ? "Sending…" : "Send me a code"}
-          </button>
-          {demo && (
-            <div className="demo-note">
-              <p>
-                <strong>Judging Thusa?</strong> Use the demo account: <span className="num">{demo.phone}</span>,
-                code <span className="num">{demo.code}</span>.
-              </p>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setPhone(demo.phone);
-                  setError(null);
-                }}
-                disabled={busy}
-              >
-                Use demo number
-              </button>
+      <form
+        className="stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void requestCode();
+        }}
+      >
+        <div className="form-heading">
+          <h1>Welcome to Thusa</h1>
+          <p className="muted">Log in or get started with your cellphone number.</p>
+        </div>
+        <div>
+          <label htmlFor="phone">
+            Cellphone number
+            <span className="hint">We&apos;ll SMS you a code. No password needed.</span>
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="082 123 4567"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
+        </div>
+        {error && (
+          <p className="message problem" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="block" disabled={busy}>
+          {busy ? "Sending…" : "Send me a code"}
+        </button>
+      </form>
+
+      {demo && (
+        <>
+          <p className="divider">
+            <span>or</span>
+          </p>
+          <section className="demo-card" aria-labelledby="demo-title">
+            <div className="demo-card-head">
+              <h2 id="demo-title">Judging Thusa?</h2>
+              <span className="tag">Demo</span>
             </div>
-          )}
-        </form>
-      ) : (
-        <form className="stack" onSubmit={verifyCode}>
-          <h1>Enter your code</h1>
-          {notice && (
-            <p className="message" role="status">
-              {notice}
-            </p>
-          )}
-          <div>
-            <label htmlFor="code">6-digit code</label>
-            <input
-              id="code"
-              className="code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="\d{6}"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              autoFocus
-              required
-            />
-          </div>
-          {error && (
-            <p className="message problem" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" className="block" disabled={busy || code.length !== 6}>
-            {busy ? "Checking…" : "Log in"}
-          </button>
-          <div>
-            <button type="button" className="link" onClick={() => requestCode()} disabled={busy}>
-              Send a new code
-            </button>
-            {" · "}
+            <p className="muted small">A shared account for judges. No SMS is sent.</p>
+            <dl className="demo-details">
+              <div>
+                <dt>Number</dt>
+                <dd className="num">{demo.phone}</dd>
+              </div>
+              <div>
+                <dt>Code</dt>
+                <dd className="num">{demo.code}</dd>
+              </div>
+            </dl>
             <button
               type="button"
-              className="link"
+              className="secondary block"
               onClick={() => {
-                setStep("phone");
-                setError(null);
+                setPhone(demo.phone);
+                void requestCode(demo.phone);
               }}
               disabled={busy}
             >
-              Use a different number
+              Log in with the demo account
             </button>
-          </div>
-          {showDevOutbox && !isDemo && (
-            <p className="muted small">
-              Dev mode: no SMS is sent. Find the code in the{" "}
-              <a href="/dev/outbox" target="_blank">
-                dev outbox
-              </a>
-              .
-            </p>
-          )}
-        </form>
+          </section>
+        </>
       )}
     </div>
   );
