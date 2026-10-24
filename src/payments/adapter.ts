@@ -1,4 +1,5 @@
 import { env, isProduction } from "@/lib/env";
+import type { PaymentLink } from "@/messaging/templates/types";
 import { mockProvider } from "./mock";
 import { stitchProvider } from "./stitch";
 
@@ -51,6 +52,25 @@ export interface PaymentProvider {
   parseWebhook(rawBody: string, headers: Headers): PaymentEvent;
   /** The payment for a request, or null if the provider doesn't (yet) say it is paid. */
   confirmPayment(providerRequestId: string): Promise<ConfirmedPayment | null>;
+}
+
+// Hosts whose payment pages may appear in a message to a parent. Each provider's page lives on its own
+// domain over https; any other URL is left out of the message.
+const PAYMENT_PAGE_HOSTS = ["stitch.money"];
+
+/** A stored payment URL as a link a message template accepts, or null if it isn't a provider's payment page. */
+export function paymentLink(url: string | null): PaymentLink | null {
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname;
+  const allowed = PAYMENT_PAGE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  if (parsed.protocol !== "https:" || !allowed || parsed.username || parsed.password) return null;
+  return parsed.toString() as PaymentLink;
 }
 
 /** The configured provider. Throws in production when none is set, rather than quietly using mock. */

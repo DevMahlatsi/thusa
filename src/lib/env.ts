@@ -13,6 +13,8 @@ const envSchema = z.object({
   STITCH_CLIENT_SECRET: z.string().optional(),
   STITCH_WEBHOOK_SECRET: z.string().optional(),
   PUBLIC_BASE_URL: z.string().optional(),
+  // Vercel Cron sends it as a bearer token to /api/cron/daily. Unset: the daily job refuses to run.
+  CRON_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

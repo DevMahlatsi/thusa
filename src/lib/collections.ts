@@ -6,6 +6,7 @@ import type { CollectionRow } from "./dashboard";
 import { db } from "./db";
 import { HttpError } from "./http";
 import { logger } from "./logger";
+import { messageParent } from "./parent-messages";
 import { todayInSa } from "./payers";
 import { addDays, dueDatesInMonth } from "./schedule-dates";
 
@@ -18,7 +19,7 @@ export const REQUEST_AHEAD_DAYS = 7;
 // Per business per SA day. Far above a crèche's needs; stops a runaway script or a shared demo account.
 export const MAX_REQUESTS_PER_DAY = 200;
 // A request stuck "sending" this long (say the server died mid-call) may be tried again.
-const SENDING_TIMEOUT_MS = 60_000;
+export const SENDING_TIMEOUT_MS = 60_000;
 
 // Strict: an amountCents (or businessId) in the body is rejected, not ignored.
 export const collectionRequestSchema = z.strictObject({
@@ -28,7 +29,8 @@ export const collectionRequestSchema = z.strictObject({
 
 export type CollectionRequest = z.infer<typeof collectionRequestSchema>;
 
-type Ctx = { userId: string; businessId: string };
+// userId is null when Thusa acts on its own (the daily job).
+export type Ctx = { userId: string | null; businessId: string };
 
 // No 0/O or 1/I/L, so a parent can read it off a statement. randomInt keeps every symbol equally likely.
 const REFERENCE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -38,6 +40,22 @@ export function newReference(): string {
   let ref = "TH";
   for (let i = 0; i < 8; i++) ref += REFERENCE_ALPHABET[randomInt(REFERENCE_ALPHABET.length)];
   return ref;
+}
+
+/**
+ * A reference no collection or balance request has. Each table's unique index guards its own rows;
+ * this keeps the two apart, so a reference always names exactly one payment request.
+ */
+export async function freshReference(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const reference = newReference();
+    const [collection, balance] = await Promise.all([
+      db().collection.findUnique({ where: { reference }, select: { id: true } }),
+      db().balanceRequest.findUnique({ where: { reference }, select: { id: true } }),
+    ]);
+    if (!collection && !balance) return reference;
+  }
+  throw new Error("Could not find a free payment reference");
 }
 
 const toDbDate = (ymd: string) => new Date(`${ymd}T00:00:00Z`);
@@ -74,7 +92,7 @@ async function insertCollection(
         dueDate: toDbDate(dueDate),
         amountCents: schedule.amountCents,
         rhythm: schedule.rhythm,
-        reference: newReference(),
+        reference: await freshReference(),
         idempotencyKey: randomUUID(),
         provider: provider.name,
       },
@@ -178,34 +196,61 @@ export async function requestCollection(ctx: Ctx, input: CollectionRequest, now 
       provider: provider.name,
     },
   });
+  // The request stands even if the message can't go out: the owner sees why on /messages and can remind.
+  try {
+    await messageParent({
+      businessId: ctx.businessId,
+      collectionId: sent.id,
+      kind: "PAYMENT_REQUEST",
+      dedupeKey: `request:${sent.id}`,
+      sentByUserId: ctx.userId,
+    });
+  } catch (err) {
+    logger.error("messaging.request_message_failed", { collectionId: sent.id, error: err });
+  }
   return { collection: sent, sent: true };
 }
 
 /** Collections due in the given month (1–12), as dashboard rows. Names only; phones aren't read. */
-export async function listCollectionRows(businessId: string, year: number, month: number): Promise<CollectionRow[]> {
+export async function listCollectionRows(businessId: string, year: number, month: number, now = new Date()): Promise<CollectionRow[]> {
+  const today = todayInSa(now);
   const rows = await db().collection.findMany({
     where: { businessId, dueDate: { gte: new Date(Date.UTC(year, month - 1, 1)), lt: new Date(Date.UTC(year, month, 1)) } },
-    include: { payer: { select: { parentName: true, childName: true } } },
+    include: {
+      payer: { select: { parentName: true, childName: true } },
+      balanceRequests: { where: { businessId, providerRequestId: { not: null } }, select: { forPaidCents: true, paymentUrl: true } },
+      messages: { where: { businessId, kind: "REMINDER", status: { not: "FAILED" } }, select: { dedupeKey: true } },
+    },
     orderBy: [{ dueDate: "asc" }, { id: "asc" }],
   });
-  return rows.map((c) => ({
-    id: c.id,
-    payerId: c.payerId,
-    parentName: c.payer.parentName,
-    childName: c.payer.childName,
-    reference: c.reference,
-    rhythm: c.rhythm,
-    dueDate: c.dueDate.toISOString().slice(0, 10),
-    amountCents: c.amountCents,
-    paidCents: c.paidCents,
-    status: c.status,
-    // Paid in full on or before the due date, by SA calendar day.
-    paidOnTime: c.status === "PAID" && c.paidAt !== null && todayInSa(c.paidAt) <= c.dueDate.toISOString().slice(0, 10),
-    // A row whose provider call failed is not sent yet: the owner can try again.
-    requested: c.providerRequestId !== null,
-    paymentUrl: c.paymentUrl,
-  }));
+  return rows.map((c) => {
+    // A part-paid collection is paid on its balance request's link, once there is one.
+    const balance = c.status === "PARTIAL" ? c.balanceRequests.find((b) => b.forPaidCents === c.paidCents) : undefined;
+    return {
+      id: c.id,
+      payerId: c.payerId,
+      parentName: c.payer.parentName,
+      childName: c.payer.childName,
+      reference: c.reference,
+      rhythm: c.rhythm,
+      dueDate: c.dueDate.toISOString().slice(0, 10),
+      amountCents: c.amountCents,
+      paidCents: c.paidCents,
+      status: c.status,
+      // Paid in full on or before the due date, by SA calendar day.
+      paidOnTime: c.status === "PAID" && c.paidAt !== null && todayInSa(c.paidAt) <= c.dueDate.toISOString().slice(0, 10),
+      // A row whose provider call failed is not sent yet: the owner can try again.
+      requested: c.providerRequestId !== null,
+      paymentUrl: balance ? balance.paymentUrl : c.paymentUrl,
+      balanceRequested: balance !== undefined,
+      remindersSent: c.messages.length,
+      remindedToday: c.messages.some((m) => m.dedupeKey === reminderKey(c.id, today)),
+    };
+  });
 }
+
+/** One reminder per collection per SA day, whoever sends it. */
+export const reminderKey = (collectionId: string, today: string) => `reminder:${collectionId}:${today}`;
 
 /** Safe for API responses: no idempotency key or provider ids. */
 export function toCollectionDto(c: Collection) {

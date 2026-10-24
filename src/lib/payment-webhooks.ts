@@ -52,9 +52,11 @@ export async function handlePaymentWebhook(
   // Not recorded: nothing was processed.
   if (!event.paidRequestId) return result(200, "ignored");
   // No session here: the signed provider id finds the collection, and its businessId scopes the rest.
-  const collection = await db().collection.findUnique({
-    where: { provider_providerRequestId: { provider: provider.name, providerRequestId: event.paidRequestId } },
-  });
+  // A part-paid collection's balance has its own link (and reference); its payments go to the same collection.
+  const where = { provider_providerRequestId: { provider: provider.name, providerRequestId: event.paidRequestId } };
+  const balance = await db().balanceRequest.findUnique({ where, include: { collection: true } });
+  const collection = balance?.collection ?? (await db().collection.findUnique({ where }));
+  const expectedReference = balance?.reference ?? collection?.reference;
   if (!collection) {
     logger.info("webhooks.unknown_request", { provider: provider.name, eventId: event.eventId });
     return result(200, "ignored");
@@ -72,12 +74,13 @@ export async function handlePaymentWebhook(
     logger.warn("webhooks.not_paid_at_provider", { provider: provider.name, collectionId: collection.id });
     return result(503, "not_paid_yet");
   }
-  if (payment.reference !== collection.reference || payment.amountCents <= 0) {
-    // Retrying won't change this. Leave the collection PENDING for a person to look at.
+  if (payment.reference !== expectedReference || payment.amountCents <= 0) {
+    // Retrying won't change this. Leave the collection as it is for a person to look at.
     logger.error("webhooks.payment_mismatch", {
       provider: provider.name,
       collectionId: collection.id,
-      referenceMatches: payment.reference === collection.reference,
+      balanceRequestId: balance?.id ?? null,
+      referenceMatches: payment.reference === expectedReference,
       amountCents: payment.amountCents,
     });
     return result(200, "mismatch");
@@ -131,7 +134,8 @@ export async function handlePaymentWebhook(
       businessId,
       metadata: {
         collectionId: collection.id,
-        reference: collection.reference,
+        balanceRequestId: balance?.id ?? null,
+        reference: payment.reference,
         amountCents: payment.amountCents,
         paidCents: updated.paidCents,
         status: updated.status,

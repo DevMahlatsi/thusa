@@ -23,6 +23,9 @@ const row = (over: Partial<CollectionRow>): CollectionRow => ({
   paidOnTime: true,
   requested: true,
   paymentUrl: null,
+  balanceRequested: false,
+  remindersSent: 0,
+  remindedToday: false,
   ...over,
 });
 

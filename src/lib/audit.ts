@@ -10,7 +10,10 @@ export type AuditAction =
   | "payer.updated"
   | "payer.archived"
   | "collection.requested"
-  | "collection.paid";
+  | "collection.paid"
+  | "collection.reminded"
+  | "collection.balance_requested"
+  | "jobs.daily_run";
 
 type AuditEntry = {
   action: AuditAction;

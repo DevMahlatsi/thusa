@@ -58,12 +58,14 @@ model Business {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  users     User[]
-  auditLogs AuditLog[]
-  payers        Payer[]
-  schedules     Schedule[]
-  collections   Collection[]
-  ledgerEntries LedgerEntry[]
+  users           User[]
+  auditLogs       AuditLog[]
+  payers          Payer[]
+  schedules       Schedule[]
+  collections     Collection[]
+  ledgerEntries   LedgerEntry[]
+  balanceRequests BalanceRequest[]
+  messages        Message[]
 }
 
 model User {
@@ -193,7 +195,9 @@ model Collection {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  ledgerEntries LedgerEntry[]
+  ledgerEntries   LedgerEntry[]
+  balanceRequests BalanceRequest[]
+  messages        Message[]
 
   // One request per payer per due date.
   @@unique([payerId, dueDate])
@@ -201,6 +205,84 @@ model Collection {
   // For the ledger to reference (id, businessId) later.
   @@unique([id, businessId])
   @@index([businessId, dueDate])
+}
+
+// A payment link for what is still owed on a part-paid collection. Payment links are fixed-amount, so the
+// balance needs a link of its own; payments on it are credited to the same collection in the ledger.
+// Like a collection, it has its own unique reference and idempotency key, and the amount is worked out
+// on the server (amountCents − paidCents), never taken from a request.
+model BalanceRequest {
+  id                String     @id @default(uuid())
+  businessId        String
+  business          Business   @relation(fields: [businessId], references: [id])
+  collectionId      String
+  collection        Collection @relation(fields: [collectionId, businessId], references: [id, businessId])
+  // The collection's paidCents when this was requested: one balance request per amount still owed,
+  // so asking again returns the same link.
+  forPaidCents      Int
+  // CHECK > 0 in the migration.
+  amountCents       Int
+  reference         String     @unique
+  idempotencyKey    String     @unique
+  provider          String
+  providerRequestId String?
+  paymentUrl        String?
+  sendingSince      DateTime?
+  requestedAt       DateTime?
+  requestedByUserId String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@unique([collectionId, forPaidCents])
+  @@unique([provider, providerRequestId])
+  @@index([businessId])
+}
+
+enum MessageKind {
+  PAYMENT_REQUEST
+  REMINDER
+  BALANCE_REQUEST
+}
+
+enum MessageStatus {
+  // Being sent right now.
+  QUEUED
+  SENT
+  // Recorded but deliberately not delivered (demo account, or messaging not switched on).
+  NOT_DELIVERED
+  FAILED
+}
+
+// Every message to a parent: what it said and whether it went out. Shown to the owner on /messages.
+// The phone is only stored masked (••••4567); the body is the rendered fixed template.
+model Message {
+  id                String        @id @default(uuid())
+  businessId        String
+  business          Business      @relation(fields: [businessId], references: [id])
+  collectionId      String
+  collection        Collection    @relation(fields: [collectionId, businessId], references: [id, businessId])
+  kind              MessageKind
+  template          String
+  language          Language
+  channel           String
+  phoneMasked       String
+  body              String
+  status            MessageStatus @default(QUEUED)
+  provider          String?
+  providerMessageId String?
+  // Why it wasn't delivered, as a short code (e.g. demo_account, provider_refused). Never provider text.
+  note              String?
+  // Null when Thusa sent it on its own (the daily job).
+  sentByUserId      String?
+  // At most one message per key per business (e.g. one reminder per collection per day), so a retry or
+  // a double click never messages a parent twice.
+  dedupeKey         String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([businessId, dedupeKey])
+  @@index([businessId, createdAt])
+  @@index([collectionId])
 }
 
 enum LedgerKind {

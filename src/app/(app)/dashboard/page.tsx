@@ -98,7 +98,7 @@ export default async function DashboardPage() {
         <WhosPaid parents={parents} isSample={isSample} />
       </div>
 
-      <RecentCollections rows={recent} isSample={isSample} canSend={!isSample && role !== "READONLY"} />
+      <RecentCollections rows={recent} isSample={isSample} canSend={!isSample && role !== "READONLY"} today={today} />
     </div>
   );
 }

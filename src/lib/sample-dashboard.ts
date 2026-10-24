@@ -55,6 +55,9 @@ export function sampleCollections(): CollectionRow[] {
         amountCents: p.amountCents,
         requested: true,
         paymentUrl: null,
+        balanceRequested: false,
+        remindersSent: 0,
+        remindedToday: false,
       };
       if (!isDue) rows.push({ ...base, paidCents: 0, status: "PENDING", paidOnTime: false });
       else if (hasIssue === "FAILED") rows.push({ ...base, paidCents: 0, status: "FAILED", paidOnTime: false });

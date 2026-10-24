@@ -1,5 +1,7 @@
 import { isProduction } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { ClickatellRefusedError, sendClickatellSms } from "./clickatell";
+import { MAX_SMS_PARTS, smsParts, toGsm } from "./sms";
 import { renderTemplate, type Language, type TemplateKey, type TemplateParams } from "./templates";
 
 export type Channel = "sms" | "whatsapp";
@@ -12,10 +14,21 @@ export type TemplateMessage<K extends TemplateKey> = {
   params: TemplateParams[K];
 };
 
-type RenderedMessage = { to: string; channel: Channel; template: TemplateKey; body: string };
+/** Text made from a fixed template by renderMessage. Nothing else can be sent. */
+export type RenderedBody = string & { readonly __brand: "RenderedBody" };
+
+type RenderedMessage = { to: string; channel: Channel; template: TemplateKey; body: RenderedBody };
+
+export type ProviderName = "clickatell" | "outbox";
+
+export type SendResult = { provider: ProviderName; providerMessageId: string | null };
+
+/** The provider refused the message (or it is too long to send). Sending it again won't help. */
+export class MessageRefusedError extends Error {}
 
 interface MessagingProvider {
-  send(message: RenderedMessage): Promise<void>;
+  readonly name: ProviderName;
+  send(message: RenderedMessage): Promise<string | null>;
 }
 
 // ---- Dev outbox stub -------------------------------------------------------
@@ -33,25 +46,60 @@ export function devOutbox(): OutboxEntry[] {
 }
 
 const outboxProvider: MessagingProvider = {
+  name: "outbox",
   async send(message) {
     const outbox = devOutbox();
     outbox.unshift({ ...message, sentAt: new Date().toISOString() });
     outbox.splice(20);
     logger.info("messaging.stub_sent", { to: message.to, template: message.template, view: "/dev/outbox" });
+    return null;
   },
 };
 
+function clickatellProvider(apiKey: string): MessagingProvider {
+  return {
+    name: "clickatell",
+    async send(message) {
+      if (message.channel !== "sms") throw new MessageRefusedError("Only SMS is set up with Clickatell");
+      try {
+        return await sendClickatellSms(apiKey, message.to, message.body);
+      } catch (err) {
+        if (err instanceof ClickatellRefusedError) throw new MessageRefusedError(err.message);
+        throw err;
+      }
+    },
+  };
+}
+
+/** Which provider would deliver a message right now, or null when none is set up (production without keys). */
+export function messagingProviderName(): ProviderName | null {
+  if (process.env.CLICKATELL_API_KEY) return "clickatell";
+  return isProduction() ? null : "outbox";
+}
+
 function provider(): MessagingProvider {
-  if (process.env.CLICKATELL_API_KEY) {
-    // TODO: Clickatell provider once keys exist.
-    throw new Error("Clickatell provider not implemented yet");
-  }
+  const apiKey = process.env.CLICKATELL_API_KEY;
+  if (apiKey) return clickatellProvider(apiKey);
   if (isProduction()) throw new Error("No messaging provider configured");
   return outboxProvider;
 }
 
+/** Renders a fixed template, folded into the GSM alphabet so an SMS costs as few parts as possible. */
+export function renderMessage<K extends TemplateKey>(language: Language, template: K, params: TemplateParams[K]): RenderedBody {
+  return toGsm(renderTemplate(language, template, params)) as RenderedBody;
+}
+
+/** Sends text from renderMessage. Throws MessageRefusedError for a message that can never go out. */
+export async function sendRendered(message: RenderedMessage): Promise<SendResult> {
+  if (message.channel === "sms" && smsParts(message.body) > MAX_SMS_PARTS) {
+    throw new MessageRefusedError(`Message needs more than ${MAX_SMS_PARTS} SMS parts`);
+  }
+  const p = provider();
+  return { provider: p.name, providerMessageId: await p.send(message) };
+}
+
 /** The only way to message anyone: a fixed template key plus typed parameters. No free text. */
-export async function sendTemplate<K extends TemplateKey>(message: TemplateMessage<K>): Promise<void> {
-  const body = renderTemplate(message.language, message.template, message.params);
-  await provider().send({ to: message.to, channel: message.channel, template: message.template, body });
+export async function sendTemplate<K extends TemplateKey>(message: TemplateMessage<K>): Promise<SendResult> {
+  const body = renderMessage(message.language, message.template, message.params);
+  return sendRendered({ to: message.to, channel: message.channel, template: message.template, body });
 }

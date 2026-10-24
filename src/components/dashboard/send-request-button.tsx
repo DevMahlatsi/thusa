@@ -1,38 +1,40 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { sendJson } from "../api-client";
+import { ActionButton } from "./action-button";
 
 // Sends only which parent and which due date. The server works out the amount from the schedule.
 export function SendRequestButton({ payerId, dueDate, parentName }: { payerId: string; dueDate: string; parentName: string }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function send() {
-    setBusy(true);
-    setError(null);
-    try {
-      await sendJson("/api/collections", "POST", { payerId, dueDate });
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
-    <span className="send-request">
-      <button type="button" className="small" onClick={send} disabled={busy} aria-label={`Send payment request to ${parentName}`}>
-        {busy ? "Sending…" : "Send request"}
-      </button>
-      {error && (
-        <span className="message problem" role="alert">
-          {error}
-        </span>
-      )}
-    </span>
+    <ActionButton
+      url="/api/collections"
+      body={{ payerId, dueDate }}
+      label="Send request"
+      busyLabel="Sending…"
+      ariaLabel={`Send payment request to ${parentName}`}
+    />
+  );
+}
+
+// No amount: the server requests what's still owed (amount − paid so far).
+export function RequestBalanceButton({ collectionId, parentName }: { collectionId: string; parentName: string }) {
+  return (
+    <ActionButton
+      url={`/api/collections/${collectionId}/balance`}
+      body={{}}
+      label="Request balance"
+      busyLabel="Sending…"
+      ariaLabel={`Send ${parentName} a payment link for the balance`}
+    />
+  );
+}
+
+export function RemindButton({ collectionId, parentName }: { collectionId: string; parentName: string }) {
+  return (
+    <ActionButton
+      url={`/api/collections/${collectionId}/reminders`}
+      body={{}}
+      label="Remind"
+      busyLabel="Sending…"
+      ariaLabel={`Send ${parentName} a reminder`}
+      secondary
+    />
   );
 }

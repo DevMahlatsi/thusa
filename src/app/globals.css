@@ -1436,6 +1436,68 @@ fieldset {
   white-space: normal;
 }
 
+.row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* ---- Messages ---- */
+
+.message-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.message-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.message-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.message-head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* The SMS exactly as the parent gets it. */
+.message-body {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.pill.not-delivered {
+  background: var(--pending-bg);
+  color: var(--pending-text);
+}
+
 /* ---- Parents ---- */
 
 /* Child, phone, payday and language collapse into the "meta" line on small screens. */

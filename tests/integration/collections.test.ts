@@ -40,6 +40,8 @@ describe.skipIf(!enabled)("integration: payment requests and tenant isolation", 
     await db().auditLog.deleteMany();
     // The ledger refuses DELETE (append-only); TRUNCATE is how tests clear it.
     await db().$executeRaw`TRUNCATE "LedgerEntry", "WebhookEvent"`;
+    await db().message.deleteMany();
+    await db().balanceRequest.deleteMany();
     await db().collection.deleteMany();
     await db().schedule.deleteMany();
     await db().payer.deleteMany();

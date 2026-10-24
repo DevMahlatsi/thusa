@@ -1,15 +1,63 @@
 import { RHYTHM_LABEL, type CollectionRow } from "@/lib/dashboard";
 import { initials } from "@/lib/initials";
 import { formatRand } from "@/lib/money";
+import { MAX_REMINDERS } from "@/lib/reminders";
 import { SamplePill, StatusPill } from "../status-pill";
-import { SendRequestButton } from "./send-request-button";
+import { RemindButton, RequestBalanceButton, SendRequestButton } from "./send-request-button";
 
 const formatDue = (isoDate: string) =>
   new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: "UTC" });
 
-type Props = { rows: CollectionRow[]; isSample: boolean; canSend: boolean };
+type Props = { rows: CollectionRow[]; isSample: boolean; canSend: boolean; today: string };
 
-export function RecentCollections({ rows, isSample, canSend }: Props) {
+const muted = (text: string) => <span className="muted small">{text}</span>;
+
+/** What the owner can do next with a row: send it, ask for the balance, remind, or nothing. */
+function RowAction({ row: r, isSample, canSend, today }: { row: CollectionRow } & Omit<Props, "rows">) {
+  if (!r.requested) {
+    return canSend ? <SendRequestButton payerId={r.payerId} dueDate={r.dueDate} parentName={r.parentName} /> : muted("Not sent");
+  }
+  if (r.status === "PAID") {
+    return (
+      <span className="muted" aria-label="No action needed">
+        –
+      </span>
+    );
+  }
+  if (isSample) {
+    return (
+      <button type="button" className="secondary small" aria-disabled="true" title="Sample data">
+        Remind
+      </button>
+    );
+  }
+  const page = r.paymentUrl && (
+    <a
+      className="button secondary small"
+      href={r.paymentUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open ${r.parentName}'s payment page`}
+    >
+      Payment page
+    </a>
+  );
+  let next: React.ReactNode = null;
+  if (!canSend) next = null;
+  else if (r.status === "PARTIAL" && !r.balanceRequested) next = <RequestBalanceButton collectionId={r.id} parentName={r.parentName} />;
+  else if (r.dueDate > today) next = null;
+  else if (r.remindedToday) next = muted("Reminded today");
+  else if (r.remindersSent >= MAX_REMINDERS) next = muted(`${MAX_REMINDERS} reminders sent`);
+  else next = <RemindButton collectionId={r.id} parentName={r.parentName} />;
+  return (
+    <span className="row-actions">
+      {next}
+      {page}
+    </span>
+  );
+}
+
+export function RecentCollections({ rows, isSample, canSend, today }: Props) {
   return (
     <section className="panel" aria-labelledby="recent-title">
       <div className="panel-header">
@@ -70,36 +118,7 @@ export function RecentCollections({ rows, isSample, canSend }: Props) {
                     <StatusPill status={r.status} />
                   </td>
                   <td data-col="action" className="right">
-                    {!r.requested ? (
-                      canSend ? (
-                        <SendRequestButton payerId={r.payerId} dueDate={r.dueDate} parentName={r.parentName} />
-                      ) : (
-                        <span className="muted small">Not sent</span>
-                      )
-                    ) : r.status === "PAID" ? (
-                      <span className="muted" aria-label="No action needed">
-                        –
-                      </span>
-                    ) : r.paymentUrl ? (
-                      <a
-                        className="button secondary small"
-                        href={r.paymentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`Open ${r.parentName}'s payment page`}
-                      >
-                        Payment page
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        className="secondary small"
-                        aria-disabled="true"
-                        title={isSample ? "Sample data: reminders arrive in a later build" : "Coming soon"}
-                      >
-                        Remind
-                      </button>
-                    )}
+                    <RowAction row={r} isSample={isSample} canSend={canSend} today={today} />
                   </td>
                 </tr>
               ))}

@@ -19,7 +19,13 @@ export type CollectionRow = {
   paidOnTime: boolean;
   // False for a due date with no payment request at the provider yet; the owner can send one.
   requested: boolean;
+  // Where the parent pays: the balance request's page once a part-paid collection has one.
   paymentUrl: string | null;
+  // PARTIAL only: a payment link for the balance has been sent.
+  balanceRequested: boolean;
+  // Reminders that went out or were recorded (not failed ones), and whether one was today (one a day).
+  remindersSent: number;
+  remindedToday: boolean;
 };
 
 export type Kpis = {
@@ -150,6 +156,9 @@ export function projectSchedules(payers: ScheduledPayer[], year: number, month: 
           paidOnTime: false,
           requested: false,
           paymentUrl: null,
+          balanceRequested: false,
+          remindersSent: 0,
+          remindedToday: false,
         }))
       : [],
   );
