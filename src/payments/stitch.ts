@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { env } from "@/lib/env";
-import type { PaymentProvider, PaymentRequestInput, PaymentRequestResult } from "./adapter";
+import type { ConfirmedPayment, PaymentEvent, PaymentProvider, PaymentRequestInput, PaymentRequestResult } from "./adapter";
+import { verifySvix } from "./svix";
 
 // Stitch Express payment links: Stitch hosts a page where the payer pays by card, Capitec Pay and so on,
 // and the money settles to the Express account. REST API, spec: https://express.stitch.money/api/openapi.json
@@ -38,6 +39,21 @@ const tokenSchema = z.object({ data: z.object({ accessToken: z.string().min(1) }
 const linkSchema = z.object({ id: z.string().min(1), link: z.url(), status: z.string() });
 const createdSchema = z.object({ data: z.object({ payment: linkSchema }) });
 const foundSchema = z.object({ data: z.object({ payments: z.array(linkSchema) }) });
+const linkDetailSchema = z.object({
+  data: z.object({
+    payment: z.object({
+      id: z.string().min(1),
+      status: z.string(),
+      amount: z.number().int(),
+      merchantReference: z.string().optional(),
+      paymentId: z.string().min(1).nullish(),
+      paidAt: z.iso.datetime({ offset: true }).optional(),
+    }),
+  }),
+});
+// The real payment.paid body (24 Oct 2026): { amount, id, linkId, status: "PAID", type: "LINK", ... }.
+// `id` equalled the link id there, against the spec, so we only read linkId.
+const paidEventSchema = z.object({ linkId: z.string().min(1).nullish(), status: z.string().optional() });
 
 const globalForStitch = globalThis as unknown as { thusaStitchToken?: { value: string; expiresAt: number } };
 
@@ -110,8 +126,45 @@ async function createPaymentRequest(input: PaymentRequestInput): Promise<Payment
   return { providerRequestId: link.id, paymentUrl: checkedLink(link.link) };
 }
 
+/**
+ * Express webhooks are signed by Svix. The shared Express account also carries other apps' events, so
+ * anything that isn't a paid link comes back with paidRequestId null and is left alone.
+ */
+function parseWebhook(rawBody: string, headers: Headers): PaymentEvent {
+  const secret = env().STITCH_WEBHOOK_SECRET;
+  if (!secret) throw new Error("Stitch is not configured: STITCH_WEBHOOK_SECRET (see .env.example)");
+  const eventId = verifySvix(secret, rawBody, headers);
+  let body: unknown;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return { eventId, paidRequestId: null };
+  }
+  const parsed = paidEventSchema.safeParse(body);
+  const paid = parsed.success && parsed.data.status === "PAID" && parsed.data.linkId;
+  return { eventId, paidRequestId: paid ? parsed.data.linkId! : null };
+}
+
+/** Asks Stitch for the link itself: only its own answer, not the webhook body, can mark anything paid. */
+async function confirmPayment(providerRequestId: string): Promise<ConfirmedPayment | null> {
+  const auth = { Authorization: `Bearer ${await accessToken(config())}` };
+  const parsed = linkDetailSchema.safeParse(
+    await call(`/api/v1/payment-links/${encodeURIComponent(providerRequestId)}`, { method: "GET", headers: auth }),
+  );
+  if (!parsed.success) throw new Error("Stitch response was not understood");
+  const link = parsed.data.data.payment;
+  if (link.id !== providerRequestId || link.status !== "PAID") return null;
+  return {
+    amountCents: link.amount,
+    reference: link.merchantReference ?? "",
+    // A link is paid once; its paymentId when Stitch gives one, otherwise the link itself.
+    providerPaymentId: link.paymentId ?? link.id,
+    paidAt: link.paidAt ? new Date(link.paidAt) : new Date(),
+  };
+}
+
 /** Throws if the Stitch settings are missing or invalid, so a bad deploy fails on the first request. */
 export function stitchProvider(): PaymentProvider {
   config();
-  return { name: "stitch", createPaymentRequest };
+  return { name: "stitch", createPaymentRequest, parseWebhook, confirmPayment };
 }

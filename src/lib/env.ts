@@ -11,6 +11,7 @@ const envSchema = z.object({
   PAYMENTS_PROVIDER: z.string().optional(),
   STITCH_CLIENT_ID: z.string().optional(),
   STITCH_CLIENT_SECRET: z.string().optional(),
+  STITCH_WEBHOOK_SECRET: z.string().optional(),
   PUBLIC_BASE_URL: z.string().optional(),
 });
 

@@ -199,8 +199,8 @@ export async function listCollectionRows(businessId: string, year: number, month
     amountCents: c.amountCents,
     paidCents: c.paidCents,
     status: c.status,
-    // Step 8 records when a payment arrives; until then nothing is paid at all.
-    paidOnTime: false,
+    // Paid in full on or before the due date, by SA calendar day.
+    paidOnTime: c.status === "PAID" && c.paidAt !== null && todayInSa(c.paidAt) <= c.dueDate.toISOString().slice(0, 10),
     // A row whose provider call failed is not sent yet: the owner can try again.
     requested: c.providerRequestId !== null,
     paymentUrl: c.paymentUrl,
@@ -220,5 +220,6 @@ export function toCollectionDto(c: Collection) {
     reference: c.reference,
     paymentUrl: c.paymentUrl,
     requestedAt: c.requestedAt?.toISOString() ?? null,
+    paidAt: c.paidAt?.toISOString() ?? null,
   };
 }

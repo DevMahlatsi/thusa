@@ -60,9 +60,10 @@ model Business {
 
   users     User[]
   auditLogs AuditLog[]
-  payers      Payer[]
-  schedules   Schedule[]
-  collections Collection[]
+  payers        Payer[]
+  schedules     Schedule[]
+  collections   Collection[]
+  ledgerEntries LedgerEntry[]
 }
 
 model User {
@@ -187,8 +188,12 @@ model Collection {
   sendingSince      DateTime?
   requestedAt       DateTime?
   requestedByUserId String?
+  // When the provider says the collection was paid in full. Null until then.
+  paidAt            DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+
+  ledgerEntries LedgerEntry[]
 
   // One request per payer per due date.
   @@unique([payerId, dueDate])
@@ -196,6 +201,45 @@ model Collection {
   // For the ledger to reference (id, businessId) later.
   @@unique([id, businessId])
   @@index([businessId, dueDate])
+}
+
+enum LedgerKind {
+  PAYMENT
+}
+
+// Money that actually moved. Append-only: a trigger in the migration refuses UPDATE and DELETE, so a
+// correction is a new entry. A collection's paidCents is the sum of its entries.
+model LedgerEntry {
+  id                String     @id @default(uuid())
+  businessId        String
+  business          Business   @relation(fields: [businessId], references: [id])
+  collectionId      String
+  collection        Collection @relation(fields: [collectionId, businessId], references: [id, businessId])
+  kind              LedgerKind
+  // Signed cents. Payments are positive (CHECKed in the migration).
+  amountCents       Int
+  provider          String
+  // The provider's id for the payment, so one payment can never be credited twice.
+  providerPaymentId String
+  // When the provider says the money was paid.
+  occurredAt        DateTime
+  createdAt         DateTime   @default(now())
+
+  @@unique([provider, providerPaymentId])
+  @@index([collectionId])
+  @@index([businessId, createdAt])
+}
+
+// Provider webhook deliveries we have processed, for dedupe. Written only once processing succeeds, so a
+// replay of a delivery that failed still runs. No payload is kept (it can carry the payer's details).
+model WebhookEvent {
+  id        String   @id @default(uuid())
+  provider  String
+  // The delivery's id from the provider (Svix's svix-id for Stitch), the same on every retry.
+  eventId   String
+  createdAt DateTime @default(now())
+
+  @@unique([provider, eventId])
 }
 
 model AuditLog {
