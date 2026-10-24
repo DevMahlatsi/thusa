@@ -32,6 +32,7 @@ describe.skipIf(!enabled)("integration: payers, schedules and tenant isolation",
 
   beforeEach(async () => {
     await db().auditLog.deleteMany();
+    await db().collection.deleteMany();
     await db().schedule.deleteMany();
     await db().payer.deleteMany();
     await db().session.deleteMany();

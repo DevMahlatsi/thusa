@@ -36,3 +36,8 @@ export function dueDatesInMonth(schedule: ScheduleDates, year: number, month: nu
   }
   return dates;
 }
+
+/** The date `days` after a YYYY-MM-DD date (negative goes back). */
+export function addDays(ymd: string, days: number): string {
+  return toYmd(toUtc(ymd) + days * DAY_MS);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueDatesInMonth } from "@/lib/schedule-dates";
+import { addDays, dueDatesInMonth } from "@/lib/schedule-dates";
 
 // October 2026 starts on a Thursday; its Fridays are the 2nd, 9th, 16th, 23rd and 30th.
 describe("dueDatesInMonth", () => {
@@ -45,5 +45,13 @@ describe("dueDatesInMonth", () => {
       "2026-10-30",
     ]);
     expect(dueDatesInMonth({ rhythm: "WEEKLY", payday: 5, startsOn: "2026-11-01" }, 2026, 10)).toEqual([]);
+  });
+});
+
+describe("addDays", () => {
+  it("crosses month and year ends, and goes back", () => {
+    expect(addDays("2026-10-28", 7)).toBe("2026-11-04");
+    expect(addDays("2026-12-30", 3)).toBe("2027-01-02");
+    expect(addDays("2028-03-01", -1)).toBe("2028-02-29");
   });
 });

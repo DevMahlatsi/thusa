@@ -17,6 +17,9 @@ export type CollectionRow = {
   paidCents: number;
   status: CollectionStatus;
   paidOnTime: boolean;
+  // False for a due date with no payment request at the provider yet; the owner can send one.
+  requested: boolean;
+  paymentUrl: string | null;
 };
 
 export type Kpis = {
@@ -145,9 +148,17 @@ export function projectSchedules(payers: ScheduledPayer[], year: number, month: 
           paidCents: 0,
           status: "PENDING" as const,
           paidOnTime: false,
+          requested: false,
+          paymentUrl: null,
         }))
       : [],
   );
+}
+
+/** Real collections plus the projected due dates that don't have one yet. */
+export function mergeWithProjected(collections: CollectionRow[], projected: CollectionRow[]): CollectionRow[] {
+  const taken = new Set(collections.map((c) => `${c.payerId}:${c.dueDate}`));
+  return [...collections, ...projected.filter((p) => !taken.has(`${p.payerId}:${p.dueDate}`))];
 }
 
 export const RHYTHM_LABEL: Record<Rhythm, string> = { WEEKLY: "Weekly", FORTNIGHTLY: "Fortnightly", MONTHLY: "Monthly" };

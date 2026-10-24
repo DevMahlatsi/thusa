@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeKpis, projectSchedules, summariseParents, weeklyBuckets, type CollectionRow } from "@/lib/dashboard";
+import {
+  computeKpis,
+  mergeWithProjected,
+  projectSchedules,
+  summariseParents,
+  weeklyBuckets,
+  type CollectionRow,
+} from "@/lib/dashboard";
 import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections } from "@/lib/sample-dashboard";
 
 const row = (over: Partial<CollectionRow>): CollectionRow => ({
@@ -14,6 +21,8 @@ const row = (over: Partial<CollectionRow>): CollectionRow => ({
   paidCents: 10_000,
   status: "PAID",
   paidOnTime: true,
+  requested: true,
+  paymentUrl: null,
   ...over,
 });
 
@@ -103,6 +112,27 @@ describe("projectSchedules", () => {
       ["a", "PENDING", 4 * 30_000],
       ["b", "PENDING", 0],
     ]);
+  });
+});
+
+describe("mergeWithProjected", () => {
+  it("keeps real collections and fills only the due dates without one", () => {
+    const projected = projectSchedules(
+      [{ id: "a", parentName: "A", childName: "a", schedule: { amountCents: 30_000, rhythm: "WEEKLY", payday: 5, startsOn: "2026-01-01" } }],
+      2026,
+      10,
+    );
+    const sent = row({ id: "c1", payerId: "a", dueDate: "2026-10-09", amountCents: 25_000, status: "PENDING", paidCents: 0 });
+    const rows = mergeWithProjected([sent], projected);
+    expect(rows.map((r) => [r.dueDate, r.requested])).toEqual([
+      ["2026-10-09", true],
+      ["2026-10-02", false],
+      ["2026-10-16", false],
+      ["2026-10-23", false],
+      ["2026-10-30", false],
+    ]);
+    // The request keeps the amount it was sent with, even if the schedule changed since.
+    expect(rows[0]!.amountCents).toBe(25_000);
   });
 });
 

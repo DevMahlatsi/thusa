@@ -53,6 +53,8 @@ export function sampleCollections(): CollectionRow[] {
         rhythm: p.rhythm,
         dueDate: iso(d),
         amountCents: p.amountCents,
+        requested: true,
+        paymentUrl: null,
       };
       if (!isDue) rows.push({ ...base, paidCents: 0, status: "PENDING", paidOnTime: false });
       else if (hasIssue === "FAILED") rows.push({ ...base, paidCents: 0, status: "FAILED", paidOnTime: false });

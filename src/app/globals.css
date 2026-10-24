@@ -1414,6 +1414,28 @@ fieldset {
   }
 }
 
+/* Collections keep their action on phones too, under the status, so requests can be sent from there. */
+@media (max-width: 899px) {
+  .table.responsive.collections-table td[data-col="action"] {
+    display: block;
+    grid-column: 2;
+    justify-self: end;
+  }
+}
+
+.send-request {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.send-request .message {
+  max-width: 16rem;
+  text-align: left;
+  white-space: normal;
+}
+
 /* ---- Parents ---- */
 
 /* Child, phone, payday and language collapse into the "meta" line on small screens. */

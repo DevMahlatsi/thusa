@@ -6,12 +6,14 @@ import { WhosPaid } from "@/components/dashboard/whos-paid";
 import { InfoIcon } from "@/components/icons";
 import { SamplePill } from "@/components/status-pill";
 import { requirePageBusinessUser } from "@/lib/auth";
-import { computeKpis, projectSchedules, summariseParents, weeklyBuckets } from "@/lib/dashboard";
+import { listCollectionRows, REQUEST_AHEAD_DAYS } from "@/lib/collections";
+import { computeKpis, mergeWithProjected, projectSchedules, summariseParents, weeklyBuckets } from "@/lib/dashboard";
 import { listPayers, todayInSa } from "@/lib/payers";
+import { addDays } from "@/lib/schedule-dates";
 import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections } from "@/lib/sample-dashboard";
 
 export default async function DashboardPage() {
-  const { businessId } = await requirePageBusinessUser();
+  const { businessId, role } = await requirePageBusinessUser();
 
   // Names and schedules only: the dashboard never decrypts phone numbers.
   const payers = (await listPayers(businessId)).map((p) => ({
@@ -26,22 +28,26 @@ export default async function DashboardPage() {
     },
   }));
 
-  // The sample preview shows until the business has a parent with a schedule. No payment requests
-  // exist yet (step 7), so real figures are what each schedule expects this month, nothing received.
+  // The sample preview shows until the business has a parent with a schedule. After that, rows are this
+  // month's payment requests, plus each schedule's due dates that don't have a request yet.
   const isSample = !payers.some((p) => p.schedule);
   const today = isSample ? SAMPLE_TODAY : todayInSa();
   const year = isSample ? SAMPLE_YEAR : Number(today.slice(0, 4));
   const month = isSample ? SAMPLE_MONTH : Number(today.slice(5, 7));
-  const rows = isSample ? sampleCollections() : projectSchedules(payers, year, month);
-  const hasCollections = isSample;
-  // Projected rows are never "paid on time", so an on-time rate would read 0%: show none instead.
+  const rows = isSample
+    ? sampleCollections()
+    : mergeWithProjected(await listCollectionRows(businessId, year, month), projectSchedules(payers, year, month));
+  const hasCollections = rows.some((r) => r.requested);
+  // Unrequested rows are never "paid on time", so an on-time rate would read 0%: show none instead.
   const kpis = { ...computeKpis(rows, today), ...(!hasCollections && { onTimeRate: null }) };
   const weeks = weeklyBuckets(rows, year, month, today);
   const parents = summariseParents(rows, today);
-  const recent = [...(hasCollections ? rows : [])]
-    .filter((r) => r.dueDate <= today)
+  // Real rows include fees due in the next week, so the owner can send those requests early.
+  const recentUntil = isSample ? today : addDays(today, REQUEST_AHEAD_DAYS);
+  const recent = rows
+    .filter((r) => r.dueDate <= recentUntil)
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || a.parentName.localeCompare(b.parentName))
-    .slice(0, 8);
+    .slice(0, 10);
   const monthLabel = new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-ZA", {
     month: "long",
     year: "numeric",
@@ -64,7 +70,8 @@ export default async function DashboardPage() {
             <InfoIcon size={18} />
             <p>
               <strong>No payment requests sent yet.</strong> Expected amounts come from your parents&apos; schedules.
-              Received and on-time figures fill in once Thusa starts collecting.
+              Use <em>Send request</em> under Recent collections for fees due in the next {REQUEST_AHEAD_DAYS} days.
+              Received and on-time figures fill in as parents pay.
             </p>
           </div>
         )
@@ -91,7 +98,7 @@ export default async function DashboardPage() {
         <WhosPaid parents={parents} isSample={isSample} />
       </div>
 
-      <RecentCollections rows={recent} isSample={isSample} />
+      <RecentCollections rows={recent} isSample={isSample} canSend={!isSample && role !== "READONLY"} />
     </div>
   );
 }

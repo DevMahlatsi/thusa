@@ -8,7 +8,8 @@ export type AuditAction =
   | "business.updated"
   | "payer.created"
   | "payer.updated"
-  | "payer.archived";
+  | "payer.archived"
+  | "collection.requested";
 
 type AuditEntry = {
   action: AuditAction;

@@ -40,6 +40,13 @@ enum Rhythm {
   MONTHLY
 }
 
+enum CollectionStatus {
+  PENDING
+  PAID
+  PARTIAL
+  FAILED
+}
+
 model Business {
   id                    String   @id @default(uuid())
   name                  String
@@ -53,8 +60,9 @@ model Business {
 
   users     User[]
   auditLogs AuditLog[]
-  payers    Payer[]
-  schedules Schedule[]
+  payers      Payer[]
+  schedules   Schedule[]
+  collections Collection[]
 }
 
 model User {
@@ -118,7 +126,8 @@ model Payer {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  schedule Schedule?
+  schedule    Schedule?
+  collections Collection[]
 
   // Lets Schedule reference (id, businessId), so a schedule can't point at another business's payer.
   @@unique([id, businessId])
@@ -147,6 +156,46 @@ model Schedule {
   // The FK pins businessId to the payer's, so this also means one schedule per payer.
   @@unique([payerId, businessId])
   @@index([businessId])
+}
+
+// One payment request to a payer for one due date. The amount and rhythm are copied from the schedule
+// when the request is made, so editing a schedule never changes a request already sent.
+// Status only becomes PAID from a verified provider event.
+model Collection {
+  id                String           @id @default(uuid())
+  businessId        String
+  business          Business         @relation(fields: [businessId], references: [id])
+  payerId           String
+  payer             Payer            @relation(fields: [payerId, businessId], references: [id, businessId])
+  dueDate           DateTime         @db.Date
+  // CHECK > 0 in the migration.
+  amountCents       Int
+  // CHECK >= 0 in the migration.
+  paidCents         Int              @default(0)
+  rhythm            Rhythm
+  status            CollectionStatus @default(PENDING)
+  // Short, random and unique (e.g. THK7Q2M9XA): goes on the payer's statement and matches payments.
+  reference         String           @unique
+  // Sent with every provider call for this collection, so a retry can't create a second payment.
+  idempotencyKey    String           @unique
+  // "mock" or "stitch". Never a provider-specific type.
+  provider          String
+  // Null until the provider accepts the request.
+  providerRequestId String?
+  paymentUrl        String?
+  // Set while a request is with the provider, so two clicks can't create two payment links.
+  sendingSince      DateTime?
+  requestedAt       DateTime?
+  requestedByUserId String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  // One request per payer per due date.
+  @@unique([payerId, dueDate])
+  @@unique([provider, providerRequestId])
+  // For the ledger to reference (id, businessId) later.
+  @@unique([id, businessId])
+  @@index([businessId, dueDate])
 }
 
 model AuditLog {

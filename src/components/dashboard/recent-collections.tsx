@@ -2,17 +2,22 @@ import { RHYTHM_LABEL, type CollectionRow } from "@/lib/dashboard";
 import { initials } from "@/lib/initials";
 import { formatRand } from "@/lib/money";
 import { SamplePill, StatusPill } from "../status-pill";
+import { SendRequestButton } from "./send-request-button";
 
 const formatDue = (isoDate: string) =>
   new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: "UTC" });
 
-export function RecentCollections({ rows, isSample }: { rows: CollectionRow[]; isSample: boolean }) {
+type Props = { rows: CollectionRow[]; isSample: boolean; canSend: boolean };
+
+export function RecentCollections({ rows, isSample, canSend }: Props) {
   return (
     <section className="panel" aria-labelledby="recent-title">
       <div className="panel-header">
         <div>
           <h2 id="recent-title">Recent collections</h2>
-          <p className="subtitle">Latest payment requests, newest first</p>
+          <p className="subtitle">
+            {isSample ? "Latest payment requests, newest first" : "This month's requests and fees due in the next week"}
+          </p>
         </div>
         {isSample && <SamplePill />}
       </div>
@@ -20,7 +25,7 @@ export function RecentCollections({ rows, isSample }: { rows: CollectionRow[]; i
         <p className="muted small">No payment requests yet. They&apos;ll appear here once Thusa starts sending them.</p>
       ) : (
         <div className="table-wrap">
-          <table className="table responsive">
+          <table className="table responsive collections-table">
             <thead>
               <tr>
                 <th scope="col">Parent</th>
@@ -48,10 +53,10 @@ export function RecentCollections({ rows, isSample }: { rows: CollectionRow[]; i
                     </span>
                   </td>
                   <td data-col="meta">
-                    Due {formatDue(r.dueDate)} · {RHYTHM_LABEL[r.rhythm]} · {r.reference}
+                    Due {formatDue(r.dueDate)} · {RHYTHM_LABEL[r.rhythm]} · {r.requested ? r.reference : "Not sent yet"}
                   </td>
                   <td data-col="ref" className="ref">
-                    {r.reference}
+                    {r.requested ? r.reference : "Not sent yet"}
                   </td>
                   <td data-col="due" className="num">
                     {formatDue(r.dueDate)}
@@ -65,10 +70,26 @@ export function RecentCollections({ rows, isSample }: { rows: CollectionRow[]; i
                     <StatusPill status={r.status} />
                   </td>
                   <td data-col="action" className="right">
-                    {r.status === "PAID" ? (
+                    {!r.requested ? (
+                      canSend ? (
+                        <SendRequestButton payerId={r.payerId} dueDate={r.dueDate} parentName={r.parentName} />
+                      ) : (
+                        <span className="muted small">Not sent</span>
+                      )
+                    ) : r.status === "PAID" ? (
                       <span className="muted" aria-label="No action needed">
                         –
                       </span>
+                    ) : r.paymentUrl ? (
+                      <a
+                        className="button secondary small"
+                        href={r.paymentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open ${r.parentName}'s payment page`}
+                      >
+                        Payment page
+                      </a>
                     ) : (
                       <button
                         type="button"
