@@ -12,7 +12,8 @@ Messaging adapter → WhatsApp/SMS (stubbed in dev)
 - src/jobs/           daily job (payday requests, reminders, balance requests), run by Vercel Cron via
                       /api/cron/daily. pg-boss later, on a host that can keep a worker running.
 - src/lib/            auth (OTP), db, validation, logger (masks PII)
-- prisma/             schema.prisma, seed.ts (demo account)
+- prisma/             schema.prisma, migrations. The demo account is seeded by src/lib/demo-seed.ts
+                      (/api/cron/demo-reset, every morning before the daily job).
 - tests/              unit + integration (webhooks, idempotency, tenant isolation)
 
 ## Payment adapter interface

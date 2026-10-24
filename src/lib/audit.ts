@@ -13,7 +13,8 @@ export type AuditAction =
   | "collection.paid"
   | "collection.reminded"
   | "collection.balance_requested"
-  | "jobs.daily_run";
+  | "jobs.daily_run"
+  | "demo.reset";
 
 type AuditEntry = {
   action: AuditAction;

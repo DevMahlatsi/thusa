@@ -170,7 +170,10 @@ export function LoginForm({ showDevOutbox, demo }: { showDevOutbox: boolean; dem
               <h2 id="demo-title">Judging Thusa?</h2>
               <span className="tag">Demo</span>
             </div>
-            <p className="muted small">A shared account for judges. No SMS is sent.</p>
+            <p className="muted small">
+              A shared demo crèche with made-up parents and five weeks of payments. Change anything: it&apos;s rebuilt
+              every morning, and no SMS is ever sent.
+            </p>
             <dl className="demo-details">
               <div>
                 <dt>Number</dt>

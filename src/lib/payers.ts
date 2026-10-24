@@ -76,6 +76,9 @@ type Ctx = { userId: string; businessId: string };
 
 const phoneContext = (businessId: string) => `payer.phone:${businessId}`;
 
+/** Encrypts a payer's phone number for this business (the only form it is stored in). */
+export const encryptPayerPhone = (businessId: string, phone: string) => encryptField(phone, phoneContext(businessId));
+
 /** Today's date in South Africa as YYYY-MM-DD. */
 export function todayInSa(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(now);
@@ -98,7 +101,7 @@ export async function createPayer(ctx: Ctx, input: PayerInput) {
       businessId: ctx.businessId,
       parentName: input.parentName,
       childName: input.childName,
-      phoneEncrypted: encryptField(input.phone, phoneContext(ctx.businessId)),
+      phoneEncrypted: encryptPayerPhone(ctx.businessId, input.phone),
       language: input.language,
       // payerId and businessId both come from the payer via the compound foreign key.
       schedule: { create: scheduleData(input.schedule) },
@@ -131,7 +134,7 @@ export async function updatePayer(ctx: Ctx, payerId: string, input: PayerUpdate)
       data: {
         parentName: input.parentName,
         childName: input.childName,
-        ...(input.phone && { phoneEncrypted: encryptField(input.phone, phoneContext(ctx.businessId)) }),
+        ...(input.phone && { phoneEncrypted: encryptPayerPhone(ctx.businessId, input.phone) }),
         language: input.language,
       },
     });
