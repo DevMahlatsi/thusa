@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CollectionsIcon, OverviewIcon, ParentsIcon, ProfileIcon, RemindersIcon } from "../icons";
+import { OverviewIcon, ParentsIcon, ProfileIcon, RemindersIcon } from "../icons";
 
 type NavEntry = {
   label: string;
@@ -17,7 +17,7 @@ type NavEntry = {
 export const NAV: NavEntry[] = [
   { label: "Overview", shortLabel: "Overview", icon: OverviewIcon, href: "/dashboard", title: "Overview", inBottomNav: true },
   { label: "Parents", shortLabel: "Parents", icon: ParentsIcon, href: "/parents", title: "Parents", inBottomNav: true },
-  { label: "Collections", shortLabel: "Collections", icon: CollectionsIcon, href: null, title: "Collections", inBottomNav: false },
+  // Collections (CollectionsIcon) is hidden until its page exists: see docs/ROADMAP.md step 10.5.
   { label: "Messages", shortLabel: "Messages", icon: RemindersIcon, href: "/messages", title: "Messages", inBottomNav: true },
   {
     label: "Business profile",
