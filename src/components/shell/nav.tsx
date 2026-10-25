@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { OverviewIcon, ParentsIcon, ProfileIcon, RemindersIcon } from "../icons";
+import { CollectionsIcon, OverviewIcon, ParentsIcon, ProfileIcon, RemindersIcon } from "../icons";
 
 type NavEntry = {
   label: string;
@@ -17,7 +17,8 @@ type NavEntry = {
 export const NAV: NavEntry[] = [
   { label: "Overview", shortLabel: "Overview", icon: OverviewIcon, href: "/dashboard", title: "Overview", inBottomNav: true },
   { label: "Parents", shortLabel: "Parents", icon: ParentsIcon, href: "/parents", title: "Parents", inBottomNav: true },
-  // Collections (CollectionsIcon) is hidden until its page exists: see docs/ROADMAP.md step 10.5.
+  // Not in the bottom nav (four items fit); on phones it's reached from the dashboard's "View all".
+  { label: "Collections", shortLabel: "Collections", icon: CollectionsIcon, href: "/collections", title: "Collections", inBottomNav: false },
   { label: "Messages", shortLabel: "Messages", icon: RemindersIcon, href: "/messages", title: "Messages", inBottomNav: true },
   {
     label: "Business profile",

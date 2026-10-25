@@ -21,6 +21,10 @@ export const MAX_REQUESTS_PER_DAY = 200;
 // A request stuck "sending" this long (say the server died mid-call) may be tried again.
 export const SENDING_TIMEOUT_MS = 60_000;
 
+/** Whether a request can go out now for this due date: this month's fees, up to REQUEST_AHEAD_DAYS ahead. */
+export const canRequestNow = (dueDate: string, today: string) =>
+  dueDate.slice(0, 7) === today.slice(0, 7) && dueDate <= addDays(today, REQUEST_AHEAD_DAYS);
+
 // Strict: an amountCents (or businessId) in the body is rejected, not ignored.
 export const collectionRequestSchema = z.strictObject({
   payerId: z.uuid({ error: "Parent not found." }),
@@ -119,7 +123,7 @@ export async function requestCollection(ctx: Ctx, input: CollectionRequest, now 
   const { schedule } = payer;
 
   const [year, month] = [Number(today.slice(0, 4)), Number(today.slice(5, 7))];
-  if (input.dueDate.slice(0, 7) !== today.slice(0, 7) || input.dueDate > addDays(today, REQUEST_AHEAD_DAYS)) {
+  if (!canRequestNow(input.dueDate, today)) {
     throw new HttpError(400, `Requests can go out for this month's fees, up to ${REQUEST_AHEAD_DAYS} days before they're due.`);
   }
   const dueDates = dueDatesInMonth({ ...schedule, startsOn: schedule.startsOn.toISOString().slice(0, 10) }, year, month);
@@ -247,6 +251,12 @@ export async function listCollectionRows(businessId: string, year: number, month
       remindedToday: c.messages.some((m) => m.dedupeKey === reminderKey(c.id, today)),
     };
   });
+}
+
+/** The earliest due date this business has a payment request for (YYYY-MM-DD), or null if none. */
+export async function firstDueDate(businessId: string): Promise<string | null> {
+  const first = await db().collection.findFirst({ where: { businessId }, orderBy: { dueDate: "asc" }, select: { dueDate: true } });
+  return first?.dueDate.toISOString().slice(0, 10) ?? null;
 }
 
 /** One reminder per collection per SA day, whoever sends it. */

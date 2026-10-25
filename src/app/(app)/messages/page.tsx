@@ -2,7 +2,7 @@ import { InfoIcon, RemindersIcon } from "@/components/icons";
 import { requirePageBusinessUser } from "@/lib/auth";
 import { LANGUAGE_NAMES } from "@/lib/business-options";
 import { isDemoBusiness, listMessages, MESSAGE_NOTES, type MessageNote } from "@/lib/parent-messages";
-import { messagingProviderName } from "@/messaging/adapter";
+import { messagingProviderName, whatsAppEnabled } from "@/messaging/adapter";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,8 @@ const STATUS = {
   FAILED: { label: "Failed", className: "failed" },
 } as const;
 
+const CHANNEL_LABEL: Record<string, string> = { sms: "SMS", whatsapp: "WhatsApp" };
+
 const formatWhen = (d: Date) =>
   d.toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" });
 
@@ -30,9 +32,11 @@ export default async function MessagesPage() {
   const { businessId } = await requirePageBusinessUser();
   const [messages, demo] = await Promise.all([listMessages(businessId), isDemoBusiness(businessId)]);
   const notice = demo
-    ? "This is the shared demo account, so messages are shown here and never sent. The parents' numbers are made up."
-    : messagingProviderName() === null
-      ? "SMS isn't switched on yet. Messages are written and shown here, but not sent to parents."
+    ? `This is the shared demo account, so messages are shown here and never sent. The parents' numbers are made up.${
+        whatsAppEnabled() ? "" : " WhatsApp waits on Meta's approval, so these show as SMS: tap WhatsApp preview on a sent fee to see the WhatsApp version."
+      }`
+    : messagingProviderName() === null && !whatsAppEnabled()
+      ? "Messaging isn't switched on yet. Messages are written and shown here, but not sent to parents."
       : null;
 
   return (
@@ -50,7 +54,7 @@ export default async function MessagesPage() {
           </span>
           <h2 id="empty-title">No messages yet</h2>
           <p className="muted">
-            When you send a payment request, a reminder or a balance request, the SMS to the parent appears here,
+            When you send a payment request, a reminder or a balance request, the message to the parent appears here,
             word for word.
           </p>
         </section>
@@ -73,7 +77,7 @@ export default async function MessagesPage() {
                     <span className={`pill ${status.className}`}>{status.label}</span>
                   </div>
                   <p className="muted small num">
-                    {KIND_LABEL[m.kind]} · {m.collection.reference} · {formatWhen(m.createdAt)} · SMS to {m.phoneMasked} ·{" "}
+                    {KIND_LABEL[m.kind]} · {m.collection.reference} · {formatWhen(m.createdAt)} · {CHANNEL_LABEL[m.channel] ?? m.channel} to {m.phoneMasked} ·{" "}
                     {LANGUAGE_NAMES[m.language]} · {m.sentByUserId ? "From the dashboard" : "Automatic"}
                   </p>
                   <p className="message-body">{m.body}</p>

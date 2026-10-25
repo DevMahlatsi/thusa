@@ -73,6 +73,17 @@ export function paymentLink(url: string | null): PaymentLink | null {
   return parsed.toString() as PaymentLink;
 }
 
+// Where payment pages live: the base plus the page's id. A WhatsApp "Pay now" button's URL is approved
+// by Meta once, as this base plus a variable, so a message only ever fills in the id.
+export const PAYMENT_PAGE_BASE_URL = "https://express.stitch.money/pay/";
+
+/** The page id at the end of a payment link, or null if the link isn't a page under PAYMENT_PAGE_BASE_URL. */
+export function paymentPageId(link: PaymentLink): string | null {
+  if (!link.startsWith(PAYMENT_PAGE_BASE_URL)) return null;
+  const id = link.slice(PAYMENT_PAGE_BASE_URL.length);
+  return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
+}
+
 /** The configured provider. Throws in production when none is set, rather than quietly using mock. */
 export function paymentProvider(): PaymentProvider {
   const name = env().PAYMENTS_PROVIDER || (isProduction() ? undefined : "mock");

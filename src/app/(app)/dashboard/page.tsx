@@ -8,9 +8,11 @@ import { SamplePill } from "@/components/status-pill";
 import { requirePageBusinessUser } from "@/lib/auth";
 import { listCollectionRows, REQUEST_AHEAD_DAYS } from "@/lib/collections";
 import { computeKpis, mergeWithProjected, projectSchedules, summariseParents, weeklyBuckets } from "@/lib/dashboard";
+import { isDemoBusiness } from "@/lib/parent-messages";
 import { listPayers, todayInSa } from "@/lib/payers";
 import { addDays } from "@/lib/schedule-dates";
 import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections } from "@/lib/sample-dashboard";
+import { whatsAppEnabled } from "@/messaging/adapter";
 
 export default async function DashboardPage() {
   const { businessId, role } = await requirePageBusinessUser();
@@ -48,6 +50,10 @@ export default async function DashboardPage() {
     .filter((r) => r.dueDate <= recentUntil)
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || a.parentName.localeCompare(b.parentName))
     .slice(0, 10);
+  // The judges' demo: a sent, unpaid request can be seen as its WhatsApp message, or sent to their own
+  // WhatsApp once WhatsApp is switched on.
+  const whatsApp =
+    !isSample && role !== "READONLY" && (await isDemoBusiness(businessId)) ? (whatsAppEnabled() ? "send" : "preview") : undefined;
   const monthLabel = new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-ZA", {
     month: "long",
     year: "numeric",
@@ -77,6 +83,24 @@ export default async function DashboardPage() {
         )
       )}
 
+      {whatsApp && (
+        <div className="sample-banner" role="note">
+          <InfoIcon size={18} />
+          {whatsApp === "send" ? (
+            <p>
+              <strong>See it on your phone.</strong> Under Recent collections, tap <em>Send request</em> on a fee due
+              this week, then <em>WhatsApp me</em> to get the parent&apos;s message on your own WhatsApp.
+            </p>
+          ) : (
+            <p>
+              <strong>See what a parent gets.</strong> Under Recent collections, tap <em>Send request</em> on a fee due
+              this week, then <em>WhatsApp preview</em>. You can pay it on Stitch&apos;s test page (no real money) and
+              watch it turn Paid.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="page-intro">
         <p className="muted">{monthLabel}</p>
         {isSample && <SamplePill />}
@@ -98,7 +122,13 @@ export default async function DashboardPage() {
         <WhosPaid parents={parents} isSample={isSample} />
       </div>
 
-      <RecentCollections rows={recent} isSample={isSample} canSend={!isSample && role !== "READONLY"} today={today} />
+      <RecentCollections
+        rows={recent}
+        isSample={isSample}
+        canSend={!isSample && role !== "READONLY"}
+        today={today}
+        whatsApp={whatsApp}
+      />
     </div>
   );
 }

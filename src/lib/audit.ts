@@ -14,7 +14,8 @@ export type AuditAction =
   | "collection.reminded"
   | "collection.balance_requested"
   | "jobs.daily_run"
-  | "demo.reset";
+  | "demo.reset"
+  | "demo.whatsapp_sample";
 
 type AuditEntry = {
   action: AuditAction;

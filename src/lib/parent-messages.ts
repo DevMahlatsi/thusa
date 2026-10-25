@@ -1,7 +1,18 @@
-import type { MessageKind } from "@/generated/prisma/client";
+import type { Language, MessageKind } from "@/generated/prisma/client";
 import { Prisma } from "@/generated/prisma/client";
-import { MessageRefusedError, messagingProviderName, renderMessage, sendRendered } from "@/messaging/adapter";
-import type { FeeParams, TemplateKey } from "@/messaging/templates";
+import {
+  MessageRefusedError,
+  messagingProviderName,
+  renderMessage,
+  sendRendered,
+  sendWhatsApp,
+  whatsAppConfig,
+  type Channel,
+  type ProviderName,
+  type SendResult,
+} from "@/messaging/adapter";
+import type { FeeParams, FeeTemplateKey } from "@/messaging/templates";
+import { isWhatsAppLanguage, renderWhatsApp } from "@/messaging/templates/whatsapp";
 import { paymentLink } from "@/payments/adapter";
 import { demoLogin } from "./auth/demo";
 import { db } from "./db";
@@ -13,11 +24,17 @@ import { payerPhone } from "./payers";
 // before it is sent, under a dedupe key, so a retry, a double click or a re-run job never messages a
 // parent twice. The owner sees every message on /messages, delivered or not.
 //
-// A message is only handed to the SMS provider when one is configured and the business isn't the
-// judges' shared demo account: the demo's parents have made-up numbers, and nobody should be able to
-// message a real person from it. Those messages are recorded as NOT_DELIVERED, with the full text.
+// WhatsApp carries a message when it's switched on and has an approved template in the parent's
+// language (English and isiZulu) and the fee has a payment page. Everything else goes by SMS when SMS
+// is switched on.
+//
+// A message is only handed to a provider when one is configured and the business isn't the judges'
+// shared demo account: the demo's parents have made-up numbers, and nobody should be able to message a
+// real person from it. Those messages are recorded as NOT_DELIVERED, with the full text. The one
+// exception is the demo's "Send to my WhatsApp" (src/lib/whatsapp-sample.ts), which only ever goes to
+// the number the judge typed in.
 
-const TEMPLATE: Record<MessageKind, Exclude<TemplateKey, "otp">> = {
+const TEMPLATE: Record<MessageKind, FeeTemplateKey> = {
   PAYMENT_REQUEST: "payment_request",
   REMINDER: "payment_reminder",
   BALANCE_REQUEST: "balance_request",
@@ -26,10 +43,13 @@ const TEMPLATE: Record<MessageKind, Exclude<TemplateKey, "otp">> = {
 // Short codes for why a message didn't go out. The page turns them into words; no provider text is kept.
 export const MESSAGE_NOTES = {
   demo_account: "Demo account: shown here, not sent",
-  messaging_off: "SMS isn't switched on yet: shown here, not sent",
+  demo_sample: "Demo: sent to the WhatsApp number typed in, not to the parent",
+  messaging_off: "Messaging isn't switched on yet: shown here, not sent",
+  whatsapp_language: "WhatsApp has no template in this language, and SMS isn't switched on yet: shown here, not sent",
+  whatsapp_no_link: "WhatsApp needs a payment page link, and SMS isn't switched on yet: shown here, not sent",
   dev_outbox: "Development: shown in the dev outbox, not sent",
-  provider_refused: "The SMS provider refused it",
-  provider_error: "The SMS provider couldn't be reached",
+  provider_refused: "The provider refused it",
+  provider_error: "The provider couldn't be reached",
 } as const;
 
 export type MessageNote = keyof typeof MESSAGE_NOTES;
@@ -41,6 +61,9 @@ type MessageRequest = {
   dedupeKey: string;
   // Null when Thusa sends it on its own (the daily job).
   sentByUserId: string | null;
+  // The demo's "Send to my WhatsApp": this number (E.164) gets the message instead of the parent, on
+  // WhatsApp only. Refused for any business but the demo's.
+  sampleTo?: string;
 };
 
 const isUniqueViolation = (err: unknown) =>
@@ -82,6 +105,18 @@ async function feeFor(businessId: string, collectionId: string, kind: MessageKin
   return { collection, params, language: collection.payer.language ?? collection.business.defaultLanguage };
 }
 
+/** The demo sample's language: the parent's when WhatsApp has it, otherwise English. */
+const sampleLanguage = (language: Language): Language => (isWhatsAppLanguage(language) ? language : "en");
+
+/**
+ * The demo sample for a payment request, as it would go out, or null if WhatsApp can't carry it. Needs no
+ * WhatsApp setup: with WhatsApp off, the demo shows it as a preview.
+ */
+export async function whatsAppSampleFor(businessId: string, collectionId: string) {
+  const { params, language } = await feeFor(businessId, collectionId, "PAYMENT_REQUEST");
+  return renderWhatsApp(sampleLanguage(language), "payment_request", params);
+}
+
 /**
  * Writes the message for one collection and sends it if it should be sent. Returns the stored message;
  * `created` is false when the dedupe key already had one (nothing new was sent). A FAILED message under
@@ -90,15 +125,58 @@ async function feeFor(businessId: string, collectionId: string, kind: MessageKin
 export async function messageParent(req: MessageRequest) {
   const { collection, params, language } = await feeFor(req.businessId, req.collectionId, req.kind);
   const template = TEMPLATE[req.kind];
-  const body = renderMessage(language, template, params);
+  const demo = await isDemoBusiness(req.businessId);
+  const whatsAppOn = whatsAppConfig() !== null;
+
+  if (req.sampleTo) {
+    if (!demo) throw new HttpError(404, "Payment request not found.");
+    const to = req.sampleTo;
+    const lang = sampleLanguage(language);
+    const whatsApp = whatsAppOn ? renderWhatsApp(lang, template, params) : null;
+    if (!whatsApp) throw new HttpError(409, "This fee can't be sent on WhatsApp.");
+    return record(
+      req,
+      { template, language: lang, channel: "whatsapp", phone: to, body: whatsApp.text },
+      { provider: "meta", send: () => sendWhatsApp(to, whatsApp), sentNote: "demo_sample" },
+    );
+  }
+
   const phone = payerPhone(collection.payer);
+  const whatsApp = whatsAppOn ? renderWhatsApp(language, template, params) : null;
+  if (whatsApp) {
+    return record(
+      req,
+      { template, language, channel: "whatsapp", phone, body: whatsApp.text },
+      demo ? { unsent: "demo_account" } : { provider: "meta", send: () => sendWhatsApp(phone, whatsApp) },
+    );
+  }
+
+  const body = renderMessage(language, template, params);
+  const smsProvider = messagingProviderName();
+  let delivery: Delivery;
+  if (demo) delivery = { unsent: "demo_account" };
+  else if (smsProvider) {
+    delivery = { provider: smsProvider, send: () => sendRendered({ to: phone, channel: "sms", template, body }) };
+  } else if (whatsAppOn) delivery = { unsent: isWhatsAppLanguage(language) ? "whatsapp_no_link" : "whatsapp_language" };
+  else delivery = { unsent: "messaging_off" };
+  return record(req, { template, language, channel: "sms", phone, body }, delivery);
+}
+
+type Draft = { template: FeeTemplateKey; language: Language; channel: Channel; phone: string; body: string };
+
+// Either how to send it, or why it's only recorded.
+type Delivery =
+  | { provider: ProviderName; send: () => Promise<SendResult>; sentNote?: MessageNote }
+  | { unsent: MessageNote };
+
+async function record(req: MessageRequest, draft: Draft, delivery: Delivery) {
   const fields = {
     kind: req.kind,
-    template,
-    language,
-    channel: "sms",
-    phoneMasked: mask(phone),
-    body,
+    template: draft.template,
+    language: draft.language,
+    channel: draft.channel,
+    phoneMasked: mask(draft.phone),
+    body: draft.body,
     status: "QUEUED" as const,
     provider: null,
     providerMessageId: null,
@@ -126,20 +204,18 @@ export async function messageParent(req: MessageRequest) {
   }
 
   let outcome: { status: "SENT" | "NOT_DELIVERED" | "FAILED"; note: MessageNote | null; provider?: string; providerMessageId?: string | null };
-  const providerName = messagingProviderName();
-  if (await isDemoBusiness(req.businessId)) outcome = { status: "NOT_DELIVERED", note: "demo_account" };
-  else if (!providerName) outcome = { status: "NOT_DELIVERED", note: "messaging_off" };
+  if ("unsent" in delivery) outcome = { status: "NOT_DELIVERED", note: delivery.unsent };
   else {
     try {
-      const sent = await sendRendered({ to: phone, channel: "sms", template, body });
+      const sent = await delivery.send();
       outcome =
         sent.provider === "outbox"
           ? { status: "NOT_DELIVERED", note: "dev_outbox", provider: sent.provider }
-          : { status: "SENT", note: null, provider: sent.provider, providerMessageId: sent.providerMessageId };
+          : { status: "SENT", note: delivery.sentNote ?? null, provider: sent.provider, providerMessageId: sent.providerMessageId };
     } catch (err) {
       const refused = err instanceof MessageRefusedError;
-      logger.error("messaging.send_failed", { messageId: message.id, provider: providerName, refused, error: err });
-      outcome = { status: "FAILED", note: refused ? "provider_refused" : "provider_error", provider: providerName };
+      logger.error("messaging.send_failed", { messageId: message.id, provider: delivery.provider, refused, error: err });
+      outcome = { status: "FAILED", note: refused ? "provider_refused" : "provider_error", provider: delivery.provider };
     }
   }
 
@@ -152,7 +228,7 @@ export async function messageParent(req: MessageRequest) {
       providerMessageId: outcome.providerMessageId ?? null,
     },
   });
-  logger.info("messaging.recorded", { messageId: done.id, kind: req.kind, status: done.status, note: done.note });
+  logger.info("messaging.recorded", { messageId: done.id, kind: req.kind, channel: done.channel, status: done.status, note: done.note });
   return { message: done, created: true };
 }
 

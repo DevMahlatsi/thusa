@@ -7,6 +7,10 @@ const envSchema = z.object({
   // Optional here so pages that never touch payer data still work; field-crypto.ts checks it on use.
   FIELD_ENCRYPTION_KEY: z.string().optional(),
   CLICKATELL_API_KEY: z.string().optional(),
+  // WhatsApp Cloud API: checked by src/messaging/whatsapp.ts on use (both or neither).
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
   // Payments: checked by src/payments/ on use, so the rest of the app runs without them.
   PAYMENTS_PROVIDER: z.string().optional(),
   STITCH_CLIENT_ID: z.string().optional(),

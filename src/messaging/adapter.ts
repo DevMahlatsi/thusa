@@ -3,6 +3,8 @@ import { logger } from "@/lib/logger";
 import { ClickatellRefusedError, sendClickatellSms } from "./clickatell";
 import { MAX_SMS_PARTS, smsParts, toGsm } from "./sms";
 import { renderTemplate, type Language, type TemplateKey, type TemplateParams } from "./templates";
+import type { WhatsAppTemplateMessage } from "./templates/whatsapp";
+import { parseWhatsAppConfig, sendWhatsAppTemplate, WhatsAppRefusedError, type WhatsAppConfig } from "./whatsapp";
 
 export type Channel = "sms" | "whatsapp";
 
@@ -19,7 +21,7 @@ export type RenderedBody = string & { readonly __brand: "RenderedBody" };
 
 type RenderedMessage = { to: string; channel: Channel; template: TemplateKey; body: RenderedBody };
 
-export type ProviderName = "clickatell" | "outbox";
+export type ProviderName = "clickatell" | "meta" | "outbox";
 
 export type SendResult = { provider: ProviderName; providerMessageId: string | null };
 
@@ -71,7 +73,7 @@ function clickatellProvider(apiKey: string): MessagingProvider {
   };
 }
 
-/** Which provider would deliver a message right now, or null when none is set up (production without keys). */
+/** Which provider would deliver an SMS right now, or null when none is set up (production without keys). */
 export function messagingProviderName(): ProviderName | null {
   if (process.env.CLICKATELL_API_KEY) return "clickatell";
   return isProduction() ? null : "outbox";
@@ -102,4 +104,32 @@ export async function sendRendered(message: RenderedMessage): Promise<SendResult
 export async function sendTemplate<K extends TemplateKey>(message: TemplateMessage<K>): Promise<SendResult> {
   const body = renderMessage(message.language, message.template, message.params);
   return sendRendered({ to: message.to, channel: message.channel, template: message.template, body });
+}
+
+// ---- WhatsApp (Meta Cloud API) -----------------------------------------------------------------------
+// Only approved templates (src/messaging/templates/whatsapp.ts), so it carries fee messages to parents,
+// never login codes. There's no dev stub: without the env vars, parents' messages go by SMS as before.
+
+/** WhatsApp Cloud API settings, or null when WhatsApp isn't switched on. Half a setup throws. */
+export const whatsAppConfig = (): WhatsAppConfig | null => parseWhatsAppConfig(process.env);
+
+/** For pages deciding what to show: a half setup counts as off here, so a page never breaks over it. */
+export function whatsAppEnabled(): boolean {
+  try {
+    return whatsAppConfig() !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Sends an approved WhatsApp template. Throws MessageRefusedError for a message that can never go out. */
+export async function sendWhatsApp(to: string, message: WhatsAppTemplateMessage): Promise<SendResult> {
+  const cfg = whatsAppConfig();
+  if (!cfg) throw new Error("WhatsApp isn't switched on");
+  try {
+    return { provider: "meta", providerMessageId: await sendWhatsAppTemplate(cfg, to, message) };
+  } catch (err) {
+    if (err instanceof WhatsAppRefusedError) throw new MessageRefusedError(err.message);
+    throw err;
+  }
 }

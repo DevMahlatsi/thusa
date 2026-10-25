@@ -30,4 +30,7 @@ export type TemplateParams = {
 
 export type TemplateKey = keyof TemplateParams;
 
+/** The templates about a fee, sent to parents. (The login code goes to owners.) */
+export type FeeTemplateKey = Exclude<TemplateKey, "otp">;
+
 export type TemplateSet = { [K in TemplateKey]: (params: TemplateParams[K]) => string };

@@ -400,6 +400,58 @@ fieldset {
   gap: 0.75rem;
 }
 
+/* A WhatsApp message as the parent sees it: text, a muted footer, and its one button. */
+.wa-preview {
+  margin: 0;
+  max-width: 26rem;
+  padding: 0.85rem 1rem 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.wa-preview p {
+  margin: 0 0 0.6rem;
+}
+
+.wa-preview .wa-button {
+  display: block;
+  margin: 0.25rem -1rem 0;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.wa-preview .wa-button:hover {
+  background: var(--canvas);
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+
+/* A tick box with its words beside it, e.g. agreeing to a message. */
+label.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+label.check input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: 0;
+  margin: 0.1rem 0 0;
+  padding: 0;
+  accent-color: var(--text);
+}
+
 /* A fixed "R" inside the field, so owners type only the number. */
 .input-prefix {
   position: relative;
@@ -1444,6 +1496,84 @@ fieldset {
   gap: 0.5rem;
 }
 
+/* ---- Collections ---- */
+
+.panel-header:has(.month-nav) {
+  flex-wrap: wrap;
+}
+
+.month-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.month-nav .button {
+  min-width: 32px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.month-nav .button[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.month-label {
+  min-width: 8.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Status filter: a row of small links; the current one is the primary near-black. */
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.filter-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 32px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.filter-tabs a:hover {
+  background: var(--canvas);
+}
+
+.filter-tabs a span {
+  color: var(--muted);
+}
+
+.filter-tabs a[aria-current="page"] {
+  background: var(--text);
+  border-color: var(--text);
+  color: #ffffff;
+}
+
+.filter-tabs a[aria-current="page"] span {
+  color: #d6d3d1;
+}
+
+@media (max-width: 599px) {
+  .month-label {
+    min-width: 0;
+  }
+}
+
 /* ---- Messages ---- */
 
 .message-list {
@@ -1491,6 +1621,8 @@ fieldset {
   font-size: 0.875rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  /* WhatsApp messages have a footer and a button on their own lines. */
+  white-space: pre-line;
 }
 
 .pill.not-delivered {
