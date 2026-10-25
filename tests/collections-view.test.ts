@@ -20,6 +20,7 @@ const row = (status: CollectionStatus, id: string = status): CollectionRow => ({
   paidCents: status === "PAID" ? 35_000 : 0,
   status,
   paidOnTime: false,
+  paidOn: null,
   requested: true,
   paymentUrl: null,
   balanceRequested: false,

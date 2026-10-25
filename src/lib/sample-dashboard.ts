@@ -2,6 +2,8 @@
 // parents and collections (demo priorities 2–4). Names are "Parent A", "Child A", and every
 // reference starts with SAMPLE- so nobody mistakes it for real money.
 import type { CollectionRow, Rhythm } from "./dashboard";
+import type { InsightPayer } from "./insights/parents";
+import { addDays } from "./schedule-dates";
 
 export const SAMPLE_YEAR = 2026;
 export const SAMPLE_MONTH = 10;
@@ -14,6 +16,8 @@ type SampleParent = {
   firstDueDay: number;
   // What goes wrong with this parent's most recent collection that is already due.
   issue?: "PARTIAL" | "FAILED" | "LATE";
+  // Pays two days before the due date.
+  paysEarly?: boolean;
 };
 
 const PARENTS: SampleParent[] = [
@@ -24,7 +28,7 @@ const PARENTS: SampleParent[] = [
   { letter: "E", rhythm: "WEEKLY", amountCents: 25_000, firstDueDay: 2, issue: "LATE" },
   { letter: "F", rhythm: "MONTHLY", amountCents: 125_000, firstDueDay: 15, issue: "FAILED" },
   { letter: "G", rhythm: "FORTNIGHTLY", amountCents: 47_500, firstDueDay: 9 },
-  { letter: "H", rhythm: "MONTHLY", amountCents: 110_000, firstDueDay: 1 },
+  { letter: "H", rhythm: "MONTHLY", amountCents: 110_000, firstDueDay: 1, paysEarly: true },
   { letter: "J", rhythm: "WEEKLY", amountCents: 20_000, firstDueDay: 6 },
   { letter: "K", rhythm: "MONTHLY", amountCents: 125_000, firstDueDay: 7 },
 ];
@@ -59,12 +63,20 @@ export function sampleCollections(): CollectionRow[] {
         remindersSent: 0,
         remindedToday: false,
       };
-      if (!isDue) rows.push({ ...base, paidCents: 0, status: "PENDING", paidOnTime: false });
-      else if (hasIssue === "FAILED") rows.push({ ...base, paidCents: 0, status: "FAILED", paidOnTime: false });
-      else if (hasIssue === "PARTIAL")
-        rows.push({ ...base, paidCents: Math.floor(p.amountCents / 2), status: "PARTIAL", paidOnTime: false });
-      else rows.push({ ...base, paidCents: p.amountCents, status: "PAID", paidOnTime: hasIssue !== "LATE" });
+      const unpaid = { paidOnTime: false, paidOn: null };
+      if (!isDue) rows.push({ ...base, ...unpaid, paidCents: 0, status: "PENDING" });
+      else if (hasIssue === "FAILED") rows.push({ ...base, ...unpaid, paidCents: 0, status: "FAILED" });
+      else if (hasIssue === "PARTIAL") rows.push({ ...base, ...unpaid, paidCents: Math.floor(p.amountCents / 2), status: "PARTIAL" });
+      else {
+        const paidOn = addDays(iso(d), hasIssue === "LATE" ? 2 : p.paysEarly ? -2 : 0);
+        rows.push({ ...base, paidCents: p.amountCents, status: "PAID", paidOnTime: hasIssue !== "LATE", paidOn });
+      }
     }
   }
   return rows;
+}
+
+/** The sample parents for "This week in plain words". "Parent A" stands in for a first name. */
+export function samplePayers(): InsightPayer[] {
+  return PARENTS.map((p) => ({ id: `sample-${p.letter}`, firstName: `Parent ${p.letter}`, rhythm: p.rhythm, feeCents: p.amountCents }));
 }

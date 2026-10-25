@@ -7,7 +7,8 @@ const enabled = Boolean(process.env.TEST_DATABASE_URL);
 describe.skipIf(!enabled)("integration: payment requests and tenant isolation", async () => {
   const { db } = await import("@/lib/db");
   const { createBusinessForUser } = await import("@/lib/business");
-  const { archivePayer, createPayer, payerInputSchema, updatePayer } = await import("@/lib/payers");
+  const { archivePayer, createPayer, listPayers, payerInputSchema, updatePayer } = await import("@/lib/payers");
+  const { loadInsights } = await import("@/lib/insights/load");
   const { listCollectionRows, MAX_REQUESTS_PER_DAY, requestCollection } = await import("@/lib/collections");
   const { mockProvider } = await import("@/payments/mock");
 
@@ -113,6 +114,33 @@ describe.skipIf(!enabled)("integration: payment requests and tenant isolation", 
     await requestCollection(a, { payerId, dueDate: "2026-10-23" }, now);
     expect(await listCollectionRows(b.businessId, 2026, 10)).toEqual([]);
     expect(await listCollectionRows(a.businessId, 2026, 10)).toHaveLength(1);
+  });
+
+  it("works out the week's insights from this business's collections only, across a month end", async () => {
+    await requestCollection(a, { payerId, dueDate: "2026-10-23" }, now);
+    await requestCollection(a, { payerId, dueDate: "2026-10-30" }, now);
+    const scheduled = async (businessId: string) =>
+      (await listPayers(businessId)).map((p) => ({
+        id: p.id,
+        parentName: p.parentName,
+        childName: p.childName,
+        schedule: p.schedule && {
+          amountCents: p.schedule.amountCents,
+          rhythm: p.schedule.rhythm,
+          payday: p.schedule.payday,
+          startsOn: p.schedule.startsOn.toISOString().slice(0, 10),
+        },
+      }));
+
+    // Sunday 1 November: the week is 26 Oct – 1 Nov, and both October fees are still unpaid.
+    const insights = await loadInsights(a.businessId, await scheduled(a.businessId), "2026-11-01");
+    expect(insights.totals).toEqual({ expectedCents: 30_000, receivedCents: 0, outstandingCents: 30_000 });
+    expect(insights.parents).toEqual([expect.objectContaining({ firstName: "Thandi", badge: "NEEDS_SUPPORT", behindCents: 60_000 })]);
+    expect(insights.suggestions).toEqual([expect.objectContaining({ type: "OFFER_ARRANGEMENT", firstName: "Thandi" })]);
+
+    const other = await loadInsights(b.businessId, await scheduled(b.businessId), "2026-11-01");
+    expect(other.totals).toEqual({ expectedCents: 0, receivedCents: 0, outstandingCents: 0 });
+    expect(other.parents).toEqual([]);
   });
 
   it.each([

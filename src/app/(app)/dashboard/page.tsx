@@ -1,20 +1,26 @@
 import Link from "next/link";
 import { ExpectedVsReceivedChart } from "@/components/dashboard/expected-vs-received-chart";
 import { KpiTiles } from "@/components/dashboard/kpi-tiles";
+import { PlainWords } from "@/components/dashboard/plain-words";
 import { RecentCollections } from "@/components/dashboard/recent-collections";
 import { WhosPaid } from "@/components/dashboard/whos-paid";
 import { InfoIcon } from "@/components/icons";
 import { SamplePill } from "@/components/status-pill";
 import { requirePageBusinessUser } from "@/lib/auth";
+import { getBusiness } from "@/lib/business";
 import { listCollectionRows, REQUEST_AHEAD_DAYS } from "@/lib/collections";
 import { computeKpis, mergeWithProjected, projectSchedules, summariseParents, weeklyBuckets } from "@/lib/dashboard";
+import { buildInsights, pickLanguage } from "@/lib/insights";
+import { loadInsights } from "@/lib/insights/load";
 import { isDemoBusiness } from "@/lib/parent-messages";
 import { listPayers, todayInSa } from "@/lib/payers";
 import { addDays } from "@/lib/schedule-dates";
-import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections } from "@/lib/sample-dashboard";
+import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections, samplePayers } from "@/lib/sample-dashboard";
 import { whatsAppEnabled } from "@/messaging/adapter";
 
-export default async function DashboardPage() {
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default async function DashboardPage({ searchParams }: Props) {
   const { businessId, role } = await requirePageBusinessUser();
 
   // Names and schedules only: the dashboard never decrypts phone numbers.
@@ -44,6 +50,13 @@ export default async function DashboardPage() {
   const kpis = { ...computeKpis(rows, today), ...(!hasCollections && { onTimeRate: null }) };
   const weeks = weeklyBuckets(rows, year, month, today);
   const parents = summariseParents(rows, today);
+  // The week can cross a month end, so it loads its own rows (sample: the sample month's).
+  const [insights, business, query] = await Promise.all([
+    isSample ? buildInsights({ rows, payers: samplePayers(), today }) : loadInsights(businessId, payers, today),
+    getBusiness(businessId),
+    searchParams,
+  ]);
+  const language = pickLanguage(query.lang, business?.defaultLanguage ?? "en");
   // Real rows include fees due in the next week, so the owner can send those requests early.
   const recentUntil = isSample ? today : addDays(today, REQUEST_AHEAD_DAYS);
   const recent = rows
@@ -107,6 +120,8 @@ export default async function DashboardPage() {
       </div>
 
       <KpiTiles kpis={kpis} onTimeNote={hasCollections ? undefined : "No payments requested yet"} />
+
+      <PlainWords insights={insights} language={language} isSample={isSample} />
 
       <div className="split">
         <section className="panel" aria-labelledby="chart-title">

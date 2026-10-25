@@ -21,6 +21,7 @@ const row = (over: Partial<CollectionRow>): CollectionRow => ({
   paidCents: 10_000,
   status: "PAID",
   paidOnTime: true,
+  paidOn: null,
   requested: true,
   paymentUrl: null,
   balanceRequested: false,

@@ -217,9 +217,16 @@ export async function requestCollection(ctx: Ctx, input: CollectionRequest, now 
 
 /** Collections due in the given month (1–12), as dashboard rows. Names only; phones aren't read. */
 export async function listCollectionRows(businessId: string, year: number, month: number, now = new Date()): Promise<CollectionRow[]> {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const ym = `${year}-${String(month).padStart(2, "0")}`;
+  return listCollectionRowsBetween(businessId, `${ym}-01`, `${ym}-${lastDay}`, now);
+}
+
+/** Collections due from `from` to `to` (YYYY-MM-DD, both included), as dashboard rows. Names only. */
+export async function listCollectionRowsBetween(businessId: string, from: string, to: string, now = new Date()): Promise<CollectionRow[]> {
   const today = todayInSa(now);
   const rows = await db().collection.findMany({
-    where: { businessId, dueDate: { gte: new Date(Date.UTC(year, month - 1, 1)), lt: new Date(Date.UTC(year, month, 1)) } },
+    where: { businessId, dueDate: { gte: toDbDate(from), lte: toDbDate(to) } },
     include: {
       payer: { select: { parentName: true, childName: true } },
       balanceRequests: { where: { businessId, providerRequestId: { not: null } }, select: { forPaidCents: true, paymentUrl: true } },
@@ -243,6 +250,7 @@ export async function listCollectionRows(businessId: string, year: number, month
       status: c.status,
       // Paid in full on or before the due date, by SA calendar day.
       paidOnTime: c.status === "PAID" && c.paidAt !== null && todayInSa(c.paidAt) <= c.dueDate.toISOString().slice(0, 10),
+      paidOn: c.status === "PAID" && c.paidAt !== null ? todayInSa(c.paidAt) : null,
       // A row whose provider call failed is not sent yet: the owner can try again.
       requested: c.providerRequestId !== null,
       paymentUrl: balance ? balance.paymentUrl : c.paymentUrl,

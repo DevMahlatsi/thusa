@@ -17,6 +17,8 @@ export type CollectionRow = {
   paidCents: number;
   status: CollectionStatus;
   paidOnTime: boolean;
+  // The SA date it was paid in full (YYYY-MM-DD); null until it is PAID.
+  paidOn: string | null;
   // False for a due date with no payment request at the provider yet; the owner can send one.
   requested: boolean;
   // Where the parent pays: the balance request's page once a part-paid collection has one.
@@ -154,6 +156,7 @@ export function projectSchedules(payers: ScheduledPayer[], year: number, month: 
           paidCents: 0,
           status: "PENDING" as const,
           paidOnTime: false,
+          paidOn: null,
           requested: false,
           paymentUrl: null,
           balanceRequested: false,
@@ -162,6 +165,14 @@ export function projectSchedules(payers: ScheduledPayer[], year: number, month: 
         }))
       : [],
   );
+}
+
+/** projectSchedules for every month from `from` to `to` (YYYY-MM-DD, both included), kept to those dates. */
+export function projectSchedulesBetween(payers: ScheduledPayer[], from: string, to: string): CollectionRow[] {
+  const monthIndex = (ymd: string) => Number(ymd.slice(0, 4)) * 12 + Number(ymd.slice(5, 7)) - 1;
+  const rows: CollectionRow[] = [];
+  for (let i = monthIndex(from); i <= monthIndex(to); i++) rows.push(...projectSchedules(payers, Math.floor(i / 12), (i % 12) + 1));
+  return rows.filter((r) => r.dueDate >= from && r.dueDate <= to);
 }
 
 /** Real collections plus the projected due dates that don't have one yet. */
