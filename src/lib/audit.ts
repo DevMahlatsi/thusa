@@ -15,7 +15,8 @@ export type AuditAction =
   | "collection.balance_requested"
   | "jobs.daily_run"
   | "demo.reset"
-  | "demo.whatsapp_sample";
+  | "demo.whatsapp_sample"
+  | "ai.summary_refreshed";
 
 type AuditEntry = {
   action: AuditAction;
@@ -25,8 +26,9 @@ type AuditEntry = {
   metadata?: Record<string, string | number | boolean | null>;
 };
 
-export async function audit(entry: AuditEntry): Promise<void> {
-  await db().auditLog.create({
+// `client` lets a caller write the entry inside its own transaction.
+export async function audit(entry: AuditEntry, client: Pick<ReturnType<typeof db>, "auditLog"> = db()): Promise<void> {
+  await client.auditLog.create({
     data: {
       action: entry.action,
       userId: entry.userId ?? null,

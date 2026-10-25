@@ -49,6 +49,7 @@ describe.skipIf(!enabled)("integration: payment requests and tenant isolation", 
     await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();
+    await db().aiSummary.deleteMany();
     await db().business.deleteMany();
     a = await owner("+27820000001", "Crèche A");
     b = await owner("+27820000002", "Crèche B");

@@ -2,10 +2,10 @@
 // is checked for several days: every state a judge should see is there, and nothing is impossible.
 import { describe, expect, it } from "vitest";
 import { MAX_REMINDERS } from "@/lib/reminders";
-import { DEMO_PARENTS, demoPhone, HISTORY_DAYS, planDemoFees, type PlannedFee } from "@/lib/demo-seed";
+import { DEMO_PARENTS, demoPhone, demoStartsOn, planDemoFees, type PlannedFee } from "@/lib/demo-seed";
+import { buildInsights, firstName } from "@/lib/insights";
 import { payerInputSchema } from "@/lib/payers";
 import { normaliseSaMobile } from "@/lib/phone";
-import { addDays } from "@/lib/schedule-dates";
 
 const DAYS = ["2026-10-24", "2026-10-26", "2026-11-01", "2026-11-17", "2026-12-31", "2027-02-28", "2027-03-01"];
 
@@ -39,12 +39,51 @@ describe("demo parents", () => {
 describe.each(DAYS)("demo history seeded on %s", (today) => {
   const fees = planDemoFees(today);
 
-  it("only covers due dates before today, within the history window", () => {
-    expect(fees.length).toBeGreaterThan(20);
+  it("only covers due dates before today, since the schedules started (about four months)", () => {
+    expect(fees.length).toBeGreaterThan(100);
     for (const f of fees) {
       expect(f.dueDate < today).toBe(true);
-      expect(f.dueDate >= addDays(today, -HISTORY_DAYS)).toBe(true);
+      expect(f.dueDate >= demoStartsOn(today)).toBe(true);
     }
+    // Every monthly parent has at least 3 fees, so the summary can tell reliable from new.
+    for (const [i, p] of DEMO_PARENTS.entries()) {
+      if (p.rhythm === "MONTHLY") expect(fees.filter((f) => f.parent === i).length, p.parentName).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("reads as a crèche that has been running a while in This week in plain words", () => {
+    const rows = fees.map((f, i) => {
+      const parent = DEMO_PARENTS[f.parent]!;
+      const paidCents = paid(f);
+      const lastPaid = f.payments.at(-1);
+      return {
+        id: `f${i}`,
+        payerId: `p${f.parent}`,
+        parentName: parent.parentName,
+        childName: parent.childName,
+        reference: "",
+        rhythm: parent.rhythm,
+        dueDate: f.dueDate,
+        amountCents: f.amountCents,
+        paidCents,
+        status: paidCents >= f.amountCents ? ("PAID" as const) : paidCents > 0 ? ("PARTIAL" as const) : ("PENDING" as const),
+        paidOnTime: paidCents >= f.amountCents && saDay(lastPaid!.at) <= f.dueDate,
+        paidOn: paidCents >= f.amountCents ? saDay(lastPaid!.at) : null,
+        requested: true,
+        paymentUrl: null,
+        balanceRequested: f.balanceAt !== null,
+        remindersSent: f.reminders.length,
+        remindedToday: false,
+      };
+    });
+    const payers = DEMO_PARENTS.map((p, i) => ({ id: `p${i}`, firstName: firstName(p.parentName), rhythm: p.rhythm, feeCents: p.amountCents }));
+    const insights = buildInsights({ rows, payers, today });
+    // On-time monthly payers, and the early ones, have a record to show.
+    expect(insights.reliable).toEqual(expect.arrayContaining(["Thandi", "Johan", "Grace", "Mpho"]));
+    expect(insights.parents.some((p) => p.badge === "NEW")).toBe(false);
+    // The late payer pays in full, but is never called reliable.
+    expect(insights.reliable).not.toContain("Nomvula");
+    expect(insights.suggestions).toContainEqual({ type: "REWARD_UPFRONT", count: 2 });
   });
 
   it("never pays more than is owed, or before the request, or in the future", () => {

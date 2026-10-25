@@ -33,6 +33,7 @@ describe.skipIf(!enabled)("integration: OTP login, sessions and tenant isolation
     await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();
+    await db().aiSummary.deleteMany();
     await db().business.deleteMany();
     await db().otpChallenge.deleteMany();
   });

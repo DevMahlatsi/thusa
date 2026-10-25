@@ -1313,8 +1313,30 @@ label.check input {
   color: var(--muted);
 }
 
-.plain-words-source {
+.plain-words-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
   margin-top: 1rem;
+}
+
+.plain-words-skeleton {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 72ch;
+}
+
+.plain-words-skeleton span {
+  display: block;
+  height: 0.9rem;
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+}
+
+.plain-words-skeleton span:last-child {
+  width: 60%;
 }
 
 /* ---- Who's paid list ---- */

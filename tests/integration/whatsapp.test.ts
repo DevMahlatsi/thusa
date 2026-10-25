@@ -67,6 +67,7 @@ describe.skipIf(!enabled)("integration: WhatsApp messages and the demo sample", 
     await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();
+    await db().aiSummary.deleteMany();
     await db().business.deleteMany();
     devOutbox().length = 0;
     a = await owner("+27820000001", "Sunshine Crèche");

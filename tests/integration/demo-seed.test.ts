@@ -30,6 +30,7 @@ describe.skipIf(!enabled)("integration: demo account reset", async () => {
     await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();
+    await db().aiSummary.deleteMany();
     await db().business.deleteMany();
     vi.stubEnv("DEMO_PHONE", "060 000 0000");
     vi.stubEnv("DEMO_OTP", "123456");

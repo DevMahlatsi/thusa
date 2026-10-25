@@ -14,7 +14,8 @@ import { addDays, dueDatesInMonth } from "./schedule-dates";
 
 // The judges' demo crèche. Every judge shares the DEMO_PHONE login and can change anything, so each
 // morning (and whenever the owner calls /api/cron/demo-reset) it is rebuilt: a new business with made-up
-// parents and about five weeks of history, worked out from today, so it always looks current.
+// parents and about four months of history (since their schedules started), worked out from today, so it
+// always looks current and every parent has enough fees to show a pattern.
 //
 // Nothing is deleted. The ledger is append-only, so the old demo business stays as it was with its
 // parents archived (no job or button acts on them again), and the demo login moves to the new business.
@@ -64,9 +65,6 @@ export const DEMO_PARENTS: readonly DemoParent[] = [
   { parentName: "Bongani Ndlovu", childName: "Sizwe", language: "zu", amountCents: 35_000, rhythm: "WEEKLY", payday: 3, habit: "behind" },
 ];
 
-/** Seeded history covers due dates from this many days ago up to yesterday. */
-export const HISTORY_DAYS = 35;
-
 /** +27000000001, +27000000002, …: shaped like an SA number, but no real mobile number looks like this. */
 export const demoPhone = (index: number) => `+27000000${String(index + 1).padStart(3, "0")}`;
 
@@ -74,7 +72,11 @@ export const demoPhone = (index: number) => `+27000000${String(index + 1).padSta
 const at = (ymd: string, hhmm: string) => new Date(`${ymd}T${hhmm}:00+02:00`);
 const toDbDate = (ymd: string) => new Date(`${ymd}T00:00:00Z`);
 
-/** The first of the month about four months back, so every schedule has run for a while. */
+/**
+ * The first of the month about four months back, so every schedule has run for a while. Seeded history
+ * covers due dates from here up to yesterday: enough for monthly parents to have 3 or 4 fees, which "This
+ * week in plain words" needs before it calls anyone reliable.
+ */
 export const demoStartsOn = (today: string) => `${addDays(today, -120).slice(0, 8)}01`;
 
 export type PlannedFee = {
@@ -126,10 +128,9 @@ function paymentsFor(parent: DemoParent, index: number, dueDate: string, today: 
 /** The demo history for each parent's due dates before today. Pure, so the shape can be tested for any day. */
 export function planDemoFees(today: string): PlannedFee[] {
   const startsOn = demoStartsOn(today);
-  const from = addDays(today, -HISTORY_DAYS);
   const yesterday = addDays(today, -1);
   return DEMO_PARENTS.flatMap((parent, index) => {
-    const dates = dueDatesBetween(parent, startsOn, from, yesterday);
+    const dates = dueDatesBetween(parent, startsOn, startsOn, yesterday);
     // The part-payer's latest fee at least 3 days old, so its balance has been requested. Fortnightly
     // fees fall in every 14-day window, so there always is one.
     const partPaid = parent.habit === "part_paid" ? dates.filter((d) => d <= addDays(today, -3)).at(-1) : undefined;

@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ExpectedVsReceivedChart } from "@/components/dashboard/expected-vs-received-chart";
 import { KpiTiles } from "@/components/dashboard/kpi-tiles";
-import { PlainWords } from "@/components/dashboard/plain-words";
+import { PlainWordsPanel, PlainWordsSkeleton } from "@/components/dashboard/plain-words";
 import { RecentCollections } from "@/components/dashboard/recent-collections";
 import { WhosPaid } from "@/components/dashboard/whos-paid";
 import { InfoIcon } from "@/components/icons";
@@ -10,12 +11,11 @@ import { requirePageBusinessUser } from "@/lib/auth";
 import { getBusiness } from "@/lib/business";
 import { listCollectionRows, REQUEST_AHEAD_DAYS } from "@/lib/collections";
 import { computeKpis, mergeWithProjected, projectSchedules, summariseParents, weeklyBuckets } from "@/lib/dashboard";
-import { buildInsights, pickLanguage } from "@/lib/insights";
-import { loadInsights } from "@/lib/insights/load";
+import { insightPeriod, pickLanguage } from "@/lib/insights";
 import { isDemoBusiness } from "@/lib/parent-messages";
-import { listPayers, todayInSa } from "@/lib/payers";
+import { listScheduledPayers, todayInSa } from "@/lib/payers";
 import { addDays } from "@/lib/schedule-dates";
-import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections, samplePayers } from "@/lib/sample-dashboard";
+import { SAMPLE_MONTH, SAMPLE_TODAY, SAMPLE_YEAR, sampleCollections } from "@/lib/sample-dashboard";
 import { whatsAppEnabled } from "@/messaging/adapter";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -24,17 +24,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   const { businessId, role } = await requirePageBusinessUser();
 
   // Names and schedules only: the dashboard never decrypts phone numbers.
-  const payers = (await listPayers(businessId)).map((p) => ({
-    id: p.id,
-    parentName: p.parentName,
-    childName: p.childName,
-    schedule: p.schedule && {
-      amountCents: p.schedule.amountCents,
-      rhythm: p.schedule.rhythm,
-      payday: p.schedule.payday,
-      startsOn: p.schedule.startsOn.toISOString().slice(0, 10),
-    },
-  }));
+  const payers = await listScheduledPayers(businessId);
 
   // The sample preview shows until the business has a parent with a schedule. After that, rows are this
   // month's payment requests, plus each schedule's due dates that don't have a request yet.
@@ -50,12 +40,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   const kpis = { ...computeKpis(rows, today), ...(!hasCollections && { onTimeRate: null }) };
   const weeks = weeklyBuckets(rows, year, month, today);
   const parents = summariseParents(rows, today);
-  // The week can cross a month end, so it loads its own rows (sample: the sample month's).
-  const [insights, business, query] = await Promise.all([
-    isSample ? buildInsights({ rows, payers: samplePayers(), today }) : loadInsights(businessId, payers, today),
-    getBusiness(businessId),
-    searchParams,
-  ]);
+  const [business, query] = await Promise.all([getBusiness(businessId), searchParams]);
   const language = pickLanguage(query.lang, business?.defaultLanguage ?? "en");
   // Real rows include fees due in the next week, so the owner can send those requests early.
   const recentUntil = isSample ? today : addDays(today, REQUEST_AHEAD_DAYS);
@@ -121,7 +106,17 @@ export default async function DashboardPage({ searchParams }: Props) {
 
       <KpiTiles kpis={kpis} onTimeNote={hasCollections ? undefined : "No payments requested yet"} />
 
-      <PlainWords insights={insights} language={language} isSample={isSample} />
+      {/* Loads on its own (its week can cross a month end, and it may call OpenAI), so the rest never waits. */}
+      <Suspense key={language} fallback={<PlainWordsSkeleton period={insightPeriod(today).label} language={language} isSample={isSample} />}>
+        <PlainWordsPanel
+          businessId={businessId}
+          payers={payers}
+          today={today}
+          language={language}
+          isSample={isSample}
+          canRefresh={role === "OWNER"}
+        />
+      </Suspense>
 
       <div className="split">
         <section className="panel" aria-labelledby="chart-title">

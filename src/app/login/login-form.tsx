@@ -171,7 +171,7 @@ export function LoginForm({ showDevOutbox, demo }: { showDevOutbox: boolean; dem
               <span className="tag">Demo</span>
             </div>
             <p className="muted small">
-              A shared demo crèche with made-up parents and five weeks of payments. Change anything: it&apos;s rebuilt
+              A shared demo crèche with made-up parents and four months of payments. Change anything: it&apos;s rebuilt
               every morning, and no SMS is ever sent.
             </p>
             <dl className="demo-details">

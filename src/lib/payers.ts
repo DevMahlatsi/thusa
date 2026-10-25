@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LANGUAGES } from "@/messaging/templates/types";
 import { audit } from "./audit";
+import type { ScheduledPayer } from "./dashboard";
 import { db } from "./db";
 import { decryptField, encryptField } from "./field-crypto";
 import { HttpError } from "./http";
@@ -119,6 +120,21 @@ export async function listPayers(businessId: string) {
     include: { schedule: true },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
+}
+
+/** Active payers' names and schedules, as the dashboard maths needs them. Phones are never decrypted here. */
+export async function listScheduledPayers(businessId: string): Promise<ScheduledPayer[]> {
+  return (await listPayers(businessId)).map((p) => ({
+    id: p.id,
+    parentName: p.parentName,
+    childName: p.childName,
+    schedule: p.schedule && {
+      amountCents: p.schedule.amountCents,
+      rhythm: p.schedule.rhythm,
+      payday: p.schedule.payday,
+      startsOn: p.schedule.startsOn.toISOString().slice(0, 10),
+    },
+  }));
 }
 
 /** Null if the payer doesn't exist or belongs to another business. Includes archived payers. */

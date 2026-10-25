@@ -66,6 +66,7 @@ model Business {
   ledgerEntries   LedgerEntry[]
   balanceRequests BalanceRequest[]
   messages        Message[]
+  aiSummaries     AiSummary[]
 }
 
 model User {
@@ -322,6 +323,35 @@ model WebhookEvent {
   createdAt DateTime @default(now())
 
   @@unique([provider, eventId])
+}
+
+enum AiSummaryStatus {
+  PENDING
+  OK
+  FAILED
+}
+
+// One row per attempt at the AI's "This week in plain words" for a business, language and week. The
+// dashboard reuses the latest OK row (24 h, or until a new payment); a PENDING row is a call in flight (it
+// claims the attempt, so two page loads can't both call), and a FAILED one makes it wait 15 minutes. Every
+// row counts towards the daily cap. text is the AI's answer after src/ai/summary.ts's checks, shown as plain
+// text only. No prompt or other payment data is kept here.
+model AiSummary {
+  id            String          @id @default(uuid())
+  businessId    String
+  business      Business        @relation(fields: [businessId], references: [id])
+  language      Language
+  // First day of the week the summary covers (insightPeriod().start).
+  periodStart   DateTime        @db.Date
+  status        AiSummaryStatus
+  text          String?
+  // A short code (timeout, http_429, bad_number…). Never OpenAI's text.
+  failureReason String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([businessId, language, periodStart, createdAt])
 }
 
 model AuditLog {
