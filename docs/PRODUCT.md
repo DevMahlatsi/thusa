@@ -19,7 +19,7 @@ ECD Census 2021: 42,420 programmes, ~70% rely mainly on fees (avg ~R509/child/mo
 - "Who's paid" dashboard: expected vs received
 - Auto set-aside for savings/tax (FNB 3PIM, later)
 - Income record from history/statements for subsidies, registration, credit
-- Low data, accessible (large text, +/− signs not colour alone), scam-safe messages
+- Low data, accessible (large text, + on incoming payments, never colour alone), scam-safe messages
 
 ## Pricing
 Starter free (≤5 payers) · Standard R99/month (≤50) · Plus R199/month.

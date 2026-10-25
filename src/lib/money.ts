@@ -11,13 +11,24 @@ function assertCents(amountCents: number) {
   if (!Number.isSafeInteger(amountCents)) throw new Error("amountCents must be an integer");
 }
 
-/** Formats integer cents as a signed rand amount, e.g. +R 1 250.00 or −R 80.00. Signs are always shown. */
-export function formatRand(amountCents: number): string {
+function rand(amountCents: number): string {
   assertCents(amountCents);
-  const sign = amountCents < 0 ? MINUS : "+";
   const abs = Math.abs(amountCents);
   const cents = (abs % 100).toString().padStart(2, "0");
-  return `${sign}R${NBSP}${groupThousands(Math.floor(abs / 100))}.${cents}`;
+  return `R${NBSP}${groupThousands(Math.floor(abs / 100))}.${cents}`;
+}
+
+/**
+ * A total, fee or balance: R 1 250.00, or −R 80.00 below zero. No plus sign: "+R 6 080.00 Outstanding"
+ * would read as money gained. For one payment coming in, use formatPayment.
+ */
+export function formatRand(amountCents: number): string {
+  return `${amountCents < 0 ? MINUS : ""}${rand(amountCents)}`;
+}
+
+/** One incoming payment: +R 1 250.00 (−R 80.00 for money going back). Only for individual payments, never totals. */
+export function formatPayment(amountCents: number): string {
+  return `${amountCents < 0 ? MINUS : "+"}${rand(amountCents)}`;
 }
 
 /** Short axis label in whole rands: R 0, R 500, R 2k, R 12.5k. Not for amounts shown as values. */

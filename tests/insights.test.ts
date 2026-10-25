@@ -118,6 +118,8 @@ describe("totals and on-time rate", () => {
     });
     expect(insights.period.label).toBe("26 Oct – 1 Nov 2026");
     expect(insights.totals).toEqual({ expectedCents: 250_000, receivedCents: 70_000, outstandingCents: 180_000 });
+    // What's outstanding: today's fee isn't late yet; the part-paid one is.
+    expect(insights.outstanding).toEqual({ dueTodayCents: 145_000, notSentCents: 0, lateCents: 35_000 });
     // The dashboard's maths: an unsent fee is not paid on time.
     expect(insights.onTimeRate).toBeCloseTo(1 / 3);
   });
@@ -126,6 +128,7 @@ describe("totals and on-time rate", () => {
     const insights = buildInsights({ rows: [unsent("a", "2026-10-23"), row("a", "2026-10-16")], payers: [], today: TODAY });
     expect(insights.onTimeRate).toBeNull();
     expect(insights.totals.expectedCents).toBe(35_000);
+    expect(insights.outstanding).toEqual({ dueTodayCents: 0, notSentCents: 35_000, lateCents: 0 });
   });
 
   it("projects due dates on both sides of a month end", () => {
@@ -401,6 +404,7 @@ describe("plainWords", () => {
   const week: Insights = {
     period: { start: "2026-10-19", end: TODAY, label: "19–25 Oct 2026" },
     totals: { expectedCents: 510_000, receivedCents: 420_000, outstandingCents: 90_000 },
+    outstanding: { dueTodayCents: 55_000, notSentCents: 0, lateCents: 35_000 },
     onTimeRate: 0.82,
     parents: [],
     suggestions: [

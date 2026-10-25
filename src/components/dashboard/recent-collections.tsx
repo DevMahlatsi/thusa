@@ -2,7 +2,7 @@ import Link from "next/link";
 import { canRequestNow } from "@/lib/collections";
 import { RHYTHM_LABEL, type CollectionRow } from "@/lib/dashboard";
 import { initials } from "@/lib/initials";
-import { formatRand } from "@/lib/money";
+import { formatPayment, formatRand } from "@/lib/money";
 import { MAX_REMINDERS } from "@/lib/reminders";
 import { SamplePill, StatusPill } from "../status-pill";
 import { RemindButton, RequestBalanceButton, SendRequestButton } from "./send-request-button";
@@ -125,7 +125,7 @@ export function CollectionsTable({ rows, isSample, canSend, today, whatsApp }: T
               </td>
               <td data-col="amount" className="right amount">
                 {formatRand(r.amountCents)}
-                {r.status === "PARTIAL" && <span>{formatRand(r.paidCents)} paid</span>}
+                {r.status === "PARTIAL" && <span>{formatPayment(r.paidCents)} paid</span>}
               </td>
               <td data-col="rhythm">{RHYTHM_LABEL[r.rhythm]}</td>
               <td data-col="status">

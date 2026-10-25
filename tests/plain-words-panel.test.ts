@@ -37,6 +37,11 @@ describe("PlainWords", () => {
     expect(html).toContain('lang="zu"');
   });
 
+  it("shows the AI's headline on a line of its own", () => {
+    const html = render({ summary: { source: "ai", text: "Half of this week's fees are in.\nYou could thank Sipho." } });
+    expect(html).toContain('<p class="plain-words-headline">Half of this week&#x27;s fees are in.</p><p>You could thank Sipho.</p>');
+  });
+
   it("offers Refresh only when allowed", () => {
     expect(render()).not.toContain("Refresh");
     expect(render({ canRefresh: true })).toContain(">Refresh</button>");

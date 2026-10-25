@@ -1302,6 +1302,11 @@ label.check input {
   line-height: 1.6;
 }
 
+.plain-words-headline {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
 .plain-words-text ul {
   display: grid;
   gap: 0.35rem;

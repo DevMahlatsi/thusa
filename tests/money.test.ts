@@ -1,26 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { centsToRandInput, formatRand, formatRandAxis, parseRandToCents } from "@/lib/money";
+import { centsToRandInput, formatPayment, formatRand, formatRandAxis, parseRandToCents } from "@/lib/money";
 
 const S = " ";
 
 describe("formatRand", () => {
   it.each([
-    [0, `+R${S}0.00`],
-    [5, `+R${S}0.05`],
-    [50_900, `+R${S}509.00`],
-    [125_000, `+R${S}1${S}250.00`],
-    [100_000_000, `+R${S}1${S}000${S}000.00`],
+    [0, `R${S}0.00`],
+    [5, `R${S}0.05`],
+    [50_900, `R${S}509.00`],
+    [125_000, `R${S}1${S}250.00`],
+    [100_000_000, `R${S}1${S}000${S}000.00`],
     [-8_000, `−R${S}80.00`],
   ])("formats %i cents as %s", (cents, expected) => {
     expect(formatRand(cents)).toBe(expected);
   });
 
-  it("always shows a sign, never relying on colour alone", () => {
-    for (const cents of [0, 1, -1, 99_999]) expect(formatRand(cents)).toMatch(/^[+−]R/);
+  it("never puts a plus on a total, fee or balance", () => {
+    for (const cents of [0, 1, 99_999, 608_000]) expect(formatRand(cents)).toMatch(/^R/);
   });
 
   it("refuses non-integer amounts", () => {
     expect(() => formatRand(10.5)).toThrow();
+  });
+});
+
+describe("formatPayment", () => {
+  it.each([
+    [17_500, `+R${S}175.00`],
+    [125_000, `+R${S}1${S}250.00`],
+    [-8_000, `−R${S}80.00`],
+  ])("formats a payment of %i cents as %s", (cents, expected) => {
+    expect(formatPayment(cents)).toBe(expected);
+  });
+
+  it("refuses non-integer amounts", () => {
+    expect(() => formatPayment(10.5)).toThrow();
   });
 });
 

@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiRequestError, createResponse, MAX_OUTPUT_TOKENS, parseAiConfig, type AiConfig } from "@/ai/client";
+import { instructionsFor, MAX_WORDS } from "@/ai/prompt";
 import { buildAiInput, checkSummary, summarise, type AiInput } from "@/ai/summary";
 import type { CollectionRow } from "@/lib/dashboard";
 import { buildInsights, type InsightPayer } from "@/lib/insights";
@@ -174,12 +175,13 @@ describe("createResponse", () => {
 });
 
 describe("buildAiInput", () => {
-  it("carries only first names, rhythms, badges, amounts, counts and the week", () => {
+  it("carries only first names, rhythms, badges, amounts and counts, and no dates", () => {
     expect(input).toEqual({
       language: "en",
-      period: "19–25 Oct 2026",
       currency: "ZAR",
       totals: { expectedCents: 70_000, receivedCents: 35_000, outstandingCents: 35_000 },
+      receivedShare: 0.5,
+      outstanding: { dueTodayCents: 0, notSentCents: 0, lateCents: 35_000 },
       onTimeRate: 0.5,
       behind: { parents: 1, cents: 70_000 },
       parents: [
@@ -193,8 +195,45 @@ describe("buildAiInput", () => {
     });
   });
 
-  it("rounds the on-time rate to whole percent", () => {
-    expect(buildAiInput({ ...insights, onTimeRate: 2 / 3 }, "zu")).toMatchObject({ language: "zu", onTimeRate: 0.67 });
+  it("rounds the on-time rate and the share received to whole percent", () => {
+    const totals = { expectedCents: 90_000, receivedCents: 30_000, outstandingCents: 60_000 };
+    expect(buildAiInput({ ...insights, totals, onTimeRate: 2 / 3 }, "zu")).toMatchObject({
+      language: "zu",
+      onTimeRate: 0.67,
+      receivedShare: 0.33,
+    });
+    const nothingDue = { expectedCents: 0, receivedCents: 0, outstandingCents: 0 };
+    expect(buildAiInput({ ...insights, totals: nothingDue }, "en").receivedShare).toBeNull();
+  });
+});
+
+describe("instructionsFor", () => {
+  const text = instructionsFor("en");
+
+  it("asks for a headline in words, then a short note: no dates, at most 3 numbers, 2 parents, one action", () => {
+    for (const rule of [
+      'Line 1 is a short headline in words',
+      "Half of this week's fees are in.",
+      "No date and no digits in the headline.",
+      `Under ${MAX_WORDS} words in all`,
+      "Do not repeat the week's dates or read out the totals",
+      "Use at most 3 numbers in all",
+      "explain why they differ",
+      "R1 450 of it is only due today.",
+      "Name at most 2 parents",
+      "End with exactly one suggested action",
+    ]) {
+      expect(text).toContain(rule);
+    }
+    expect(MAX_WORDS).toBe(60);
+  });
+
+  it("makes the AI say 'this week' with the weekly on-time rate", () => {
+    expect(text).toContain('whenever you quote this rate, say "this week"');
+  });
+
+  it("asks for the owner's language, headline included", () => {
+    expect(instructionsFor("st")).toContain("Write everything, the headline too, in Sesotho");
   });
 });
 
@@ -204,9 +243,14 @@ describe("checkSummary", () => {
 
   it("accepts plain text that uses only the input's numbers", () => {
     ok(
-      "This week (19–25 Oct 2026) you received R350 of R700, so R350 is still to come. 50% was paid on time. Thandi has R700 to catch up on; you could agree a payment plan with Thandi. 1 parent paid early, and you could thank them.",
+      "Half of this week's fees are in.\nThandi has R700 to catch up on, and R350 of it is from this week. 50% was paid on time this week. You could agree a payment plan with Thandi.",
     );
     ok("Over the last 7 days, 2 parents had fees due.");
+    ok("1 parent paid early, and you could thank them.");
+  });
+
+  it("doesn't let the AI quote the week's dates (it isn't given them)", () => {
+    bad("This week (19–25 Oct 2026) went well.", "bad_number");
   });
 
   it("reads amounts in any format as cents", () => {
@@ -251,8 +295,12 @@ describe("checkSummary", () => {
     expect(checkSummary("U-Thandi usasele no-R700.", { ...input, language: "zu" })).toMatchObject({ ok: true });
   });
 
-  it("tidies whitespace", () => {
-    expect(checkSummary("  Thandi has\nR700 to pay.  ", input)).toEqual({ ok: true, text: "Thandi has R700 to pay." });
+  it("keeps the headline on its own line and makes the rest one paragraph", () => {
+    expect(checkSummary("  Half of this week's fees are in.  \n\n Thandi has\nR700   to pay. ", input)).toEqual({
+      ok: true,
+      text: "Half of this week's fees are in.\nThandi has R700 to pay.",
+    });
+    expect(checkSummary("  Thandi has R700 to pay.  ", input)).toEqual({ ok: true, text: "Thandi has R700 to pay." });
   });
 });
 
@@ -286,14 +334,14 @@ describe("summarise", () => {
       text: "This week you received R350 of R700. You could agree a payment plan with Thandi.",
     });
     const body = sentBody();
-    expect(body.instructions).toContain("Write in English.");
+    expect(body.instructions).toContain("in English.");
     expect(JSON.parse(String(body.input))).toEqual(input);
   });
 
   it("asks for the owner's language", async () => {
     fetchMock.mockResolvedValueOnce(answer("Kuleli sonto uthole u-R350."));
     expect(await summarise(insights, "zu", ON)).toMatchObject({ source: "ai" });
-    expect(sentBody().instructions).toContain("Write in isiZulu.");
+    expect(sentBody().instructions).toContain("in isiZulu.");
     expect(JSON.parse(String(sentBody().input))).toMatchObject({ language: "zu" });
   });
 

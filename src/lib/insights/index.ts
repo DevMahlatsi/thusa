@@ -17,6 +17,8 @@ export type Insights = {
   period: Period;
   // The dashboard's own maths over fees due in the period, including due dates with no request sent yet.
   totals: { expectedCents: number; receivedCents: number; outstandingCents: number };
+  // What makes up the week's outstanding money: due today (not late yet), never sent, and late (sent, past due).
+  outstanding: { dueTodayCents: number; notSentCents: number; lateCents: number };
   // Null when no fee in the period was sent: unsent fees are never on time, so the rate would read 0%.
   onTimeRate: number | null;
   // The TOP_PARENTS most relevant parents, most relevant first.
@@ -42,10 +44,16 @@ export function buildInsights({ rows, payers, today }: { rows: CollectionRow[]; 
   const everyone = payers.map((p) => parentInsight(p, byPayer.get(p.id) ?? [], today)).sort(byRelevance);
   const parents = everyone.slice(0, TOP_PARENTS);
   const behind = everyone.filter((p) => p.behindCents > 0);
+  const short = (rs: CollectionRow[]) => rs.reduce((sum, r) => sum + Math.max(0, r.amountCents - r.paidCents), 0);
 
   return {
     period,
     totals: { expectedCents: kpis.expectedCents, receivedCents: kpis.receivedCents, outstandingCents: kpis.outstandingCents },
+    outstanding: {
+      dueTodayCents: short(inPeriod.filter((r) => r.dueDate === today)),
+      notSentCents: short(inPeriod.filter((r) => r.dueDate < today && !r.requested)),
+      lateCents: short(inPeriod.filter((r) => r.dueDate < today && r.requested)),
+    },
     onTimeRate: inPeriod.some((r) => r.requested) ? kpis.onTimeRate : null,
     parents,
     suggestions: suggestionsFor(parents, everyone),

@@ -22,9 +22,11 @@ export type Summary =
 /** What goes to OpenAI, built field by field from the insights (never the insights whole). */
 export type AiInput = {
   language: Language;
-  period: string;
   currency: "ZAR";
   totals: { expectedCents: number; receivedCents: number; outstandingCents: number };
+  // received ÷ expected, for the headline in words ("Half of this week's fees are in"). Null if nothing was due.
+  receivedShare: number | null;
+  outstanding: { dueTodayCents: number; notSentCents: number; lateCents: number };
   onTimeRate: number | null;
   behind: { parents: number; cents: number };
   parents: { firstName: string; rhythm: Rhythm; badge: Badge; behindCents: number }[];
@@ -32,14 +34,17 @@ export type AiInput = {
 };
 
 export function buildAiInput(insights: Insights, language: Language): AiInput {
-  const { totals } = insights;
+  const { totals, outstanding } = insights;
+  // Two decimals, so a percentage the AI writes is a whole number we can check.
+  const share = (ratio: number) => Math.round(ratio * 100) / 100;
+  // No dates: the panel already shows the week, and the AI shouldn't repeat it.
   return {
     language,
-    period: insights.period.label,
     currency: "ZAR",
     totals: { expectedCents: totals.expectedCents, receivedCents: totals.receivedCents, outstandingCents: totals.outstandingCents },
-    // Two decimals, so the percentage the AI writes is a whole number we can check.
-    onTimeRate: insights.onTimeRate === null ? null : Math.round(insights.onTimeRate * 100) / 100,
+    receivedShare: totals.expectedCents > 0 ? share(totals.receivedCents / totals.expectedCents) : null,
+    outstanding: { dueTodayCents: outstanding.dueTodayCents, notSentCents: outstanding.notSentCents, lateCents: outstanding.lateCents },
+    onTimeRate: insights.onTimeRate === null ? null : share(insights.onTimeRate),
     behind: { parents: insights.behind.count, cents: insights.behind.cents },
     parents: insights.parents.map((p) => ({ firstName: p.firstName, rhythm: p.rhythm, badge: p.badge, behindCents: p.behindCents })),
     suggestions: insights.suggestions.map((s) =>
@@ -48,10 +53,11 @@ export function buildAiInput(insights: Insights, language: Language): AiInput {
   };
 }
 
-/** The numbers the AI may write: amounts (in cents) and everything else (counts, the %, the week's dates). */
+/** The numbers the AI may write: amounts (in cents) and everything else (counts, percentages, 7 days). */
 export function allowedNumbers(input: AiInput): { cents: Set<number>; plain: Set<number> } {
   const cents = new Set([
     ...Object.values(input.totals),
+    ...Object.values(input.outstanding),
     input.behind.cents,
     ...input.parents.map((p) => p.behindCents),
   ]);
@@ -64,9 +70,9 @@ export function allowedNumbers(input: AiInput): { cents: Set<number>; plain: Set
     input.suggestions.length,
     ...input.suggestions.flatMap((s) => (s.type === "REWARD_UPFRONT" ? [s.count] : [])),
     PERIOD_DAYS,
-    ...(input.period.match(/\d+/g) ?? []).map(Number),
   ]);
   if (input.onTimeRate !== null) plain.add(Math.round(input.onTimeRate * 100));
+  if (input.receivedShare !== null) plain.add(Math.round(input.receivedShare * 100));
   return { cents, plain };
 }
 
@@ -78,10 +84,17 @@ const LINK = /https?:|www\.|\b[\w-]+\.(?:com|co|za|org|net|io|me|ly|link)\b/i;
 const EMOJI = /\p{Extended_Pictographic}/u;
 const GENDERED = /\b(?:he|she|him|his|her|hers|himself|herself)\b/i;
 
-/** The AI's text, tidied, if it can be shown; otherwise why not. */
+/**
+ * The AI's text, tidied, if it can be shown; otherwise why not. The first line is the headline: it stays on
+ * a line of its own, and everything after it becomes one paragraph.
+ */
 export function checkSummary(raw: string, input: AiInput): { ok: true; text: string } | { ok: false; reason: SummaryFailure } {
-  // Line breaks and runs of spaces become one space; non-breaking spaces inside amounts stay.
-  const text = raw.replace(/[^\S\u00a0\u202f]+/g, " ").trim();
+  // Runs of spaces become one space; non-breaking spaces inside amounts stay.
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[^\S\u00a0\u202f]+/g, " ").trim())
+    .filter(Boolean);
+  const text = lines.length > 1 ? `${lines[0]}\n${lines.slice(1).join(" ")}` : (lines[0] ?? "");
   if (!text) return { ok: false, reason: "empty" };
   if (text.length > MAX_SUMMARY_CHARS) return { ok: false, reason: "too_long" };
   if (MARKUP.test(raw) || LINK.test(text) || EMOJI.test(text)) return { ok: false, reason: "bad_format" };

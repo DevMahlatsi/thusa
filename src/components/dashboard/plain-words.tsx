@@ -62,6 +62,17 @@ function Header({ period, language, isSample }: { period: string; language: Lang
   );
 }
 
+// The AI's first line is its headline ("Half of this week's fees are in."); the rest is one paragraph.
+function AiText({ text }: { text: string }) {
+  const [headline, ...rest] = text.split("\n");
+  return (
+    <>
+      <p className="plain-words-headline">{headline}</p>
+      {rest.length > 0 && <p>{rest.join(" ")}</p>}
+    </>
+  );
+}
+
 type Props = { period: string; language: Language; summary: ShownSummary; isSample: boolean; canRefresh: boolean };
 
 export function PlainWords({ period, language, summary, isSample, canRefresh }: Props) {
@@ -70,7 +81,7 @@ export function PlainWords({ period, language, summary, isSample, canRefresh }: 
       <Header period={period} language={language} isSample={isSample} />
       <div className="plain-words-text" lang={language}>
         {summary.source === "ai" ? (
-          <p>{summary.text}</p>
+          <AiText text={summary.text} />
         ) : (
           <>
             <p>{summary.facts.join(" ")}</p>
