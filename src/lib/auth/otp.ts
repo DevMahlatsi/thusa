@@ -11,11 +11,13 @@ export const OTP_TTL_MINUTES = 5;
 export const OTP_MAX_ATTEMPTS = 3;
 
 const MINUTE = 60_000;
-const LIMITS = {
+export const OTP_LIMITS = {
   cooldownMs: 30_000, // between requests for the same phone
   perPhone15Min: 3,
   perPhoneDay: 10,
   perIpHour: 10,
+  // The demo sends no SMS and its code is on the login page, so this only stops a script filling the table.
+  demoPerIpHour: 60,
 };
 
 const tooMany = () => new HttpError(429, "Too many code requests. Please wait a few minutes and try again.");
@@ -27,17 +29,21 @@ export async function requestOtp(phoneE164: string, ip: string): Promise<void> {
   const since = (ms: number) => ({ gte: new Date(now - ms) });
   const demo = demoLogin();
   const isDemo = demo?.phoneE164 === phoneE164;
+  // Demo and real requests from one IP are counted apart, so recording the demo (or a room of judges on
+  // one network) never uses up a real owner's allowance, and real requests never block the demo.
+  const ipScope = isDemo ? { phoneE164 } : demo ? { phoneE164: { not: demo.phoneE164 } } : {};
 
   const [lastForPhone, phone15Min, phoneDay, ipHour] = await Promise.all([
-    db().otpChallenge.findFirst({ where: { phoneE164, createdAt: since(LIMITS.cooldownMs) } }),
+    db().otpChallenge.findFirst({ where: { phoneE164, createdAt: since(OTP_LIMITS.cooldownMs) } }),
     db().otpChallenge.count({ where: { phoneE164, createdAt: since(15 * MINUTE) } }),
     db().otpChallenge.count({ where: { phoneE164, createdAt: since(24 * 60 * MINUTE) } }),
-    db().otpChallenge.count({ where: { ipHash, createdAt: since(60 * MINUTE) } }),
+    db().otpChallenge.count({ where: { ipHash, ...ipScope, createdAt: since(60 * MINUTE) } }),
   ]);
-  // Several judges share the demo number, so it skips the per-phone limits (the per-IP limit still applies).
+  // Several judges share the demo number, so it skips the per-phone limits and has its own per-IP limit.
   const phoneLimited =
-    !isDemo && (Boolean(lastForPhone) || phone15Min >= LIMITS.perPhone15Min || phoneDay >= LIMITS.perPhoneDay);
-  if (phoneLimited || ipHour >= LIMITS.perIpHour) {
+    !isDemo && (Boolean(lastForPhone) || phone15Min >= OTP_LIMITS.perPhone15Min || phoneDay >= OTP_LIMITS.perPhoneDay);
+  const ipLimit = isDemo ? OTP_LIMITS.demoPerIpHour : OTP_LIMITS.perIpHour;
+  if (phoneLimited || ipHour >= ipLimit) {
     logger.warn("auth.otp_rate_limited", { phone: phoneE164 });
     throw tooMany();
   }

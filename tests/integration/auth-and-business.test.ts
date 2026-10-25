@@ -6,7 +6,7 @@ const enabled = Boolean(process.env.TEST_DATABASE_URL);
 
 describe.skipIf(!enabled)("integration: OTP login, sessions and tenant isolation", async () => {
   const { db } = await import("@/lib/db");
-  const { requestOtp, verifyOtp, OTP_MAX_ATTEMPTS } = await import("@/lib/auth/otp");
+  const { requestOtp, verifyOtp, OTP_LIMITS, OTP_MAX_ATTEMPTS } = await import("@/lib/auth/otp");
   const { createSession, findSessionUser, revokeSession } = await import("@/lib/auth/session");
   const { createBusinessForUser, getBusiness, updateBusiness } = await import("@/lib/business");
   const { devOutbox } = await import("@/messaging/adapter");
@@ -96,6 +96,21 @@ describe.skipIf(!enabled)("integration: OTP login, sessions and tenant isolation
       await requestOtp(demoPhone, "10.0.0.3");
       await requestOtp(demoPhone, "10.0.0.4");
       expect((await verifyOtp(demoPhone, "123456")).phoneE164).toBe(demoPhone);
+    });
+
+    it("lets one person log in again and again from the same IP, without using up its real allowance", async () => {
+      for (let i = 0; i <= OTP_LIMITS.perIpHour; i++) {
+        await requestOtp(demoPhone, "10.0.0.1");
+        expect((await verifyOtp(demoPhone, "123456")).phoneE164).toBe(demoPhone);
+      }
+      await requestOtp(phoneA, "10.0.0.1");
+      expect(devOutbox()).toHaveLength(1);
+    });
+
+    it("still caps demo code requests per IP", async () => {
+      for (let i = 0; i < OTP_LIMITS.demoPerIpHour; i++) await requestOtp(demoPhone, "10.0.0.1");
+      await expect(requestOtp(demoPhone, "10.0.0.1")).rejects.toMatchObject({ status: 429 });
+      await requestOtp(demoPhone, "10.0.0.2");
     });
 
     it("never accepts the fixed code for any other number", async () => {
