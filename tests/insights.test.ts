@@ -22,7 +22,7 @@ import { LANGUAGES } from "@/messaging/templates/types";
 
 // Sunday 25 October 2026.
 const TODAY = "2026-10-25";
-const plain = (text: string) => text.replace(/ /g, " ");
+const plain = (text: string) => text.replace(/\u00a0/g, " ");
 
 let seq = 0;
 const row = (payerId: string, dueDate: string, over: Partial<CollectionRow> = {}): CollectionRow => ({

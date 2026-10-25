@@ -1,7 +1,7 @@
 // Amounts as they read in a sentence (docs/AI.md: "R4 200"). Not a ledger line, so no sign. A
 // non-breaking space groups thousands, so an amount never splits across lines.
 
-const NBSP = " ";
+const NBSP = "\u00a0";
 
 /** 420000 -> "R4 200", 420050 -> "R4 200.50". */
 export function proseRand(amountCents: number): string {

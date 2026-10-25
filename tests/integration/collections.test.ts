@@ -9,6 +9,7 @@ describe.skipIf(!enabled)("integration: payment requests and tenant isolation", 
   const { createBusinessForUser } = await import("@/lib/business");
   const { archivePayer, createPayer, listPayers, payerInputSchema, updatePayer } = await import("@/lib/payers");
   const { loadInsights } = await import("@/lib/insights/load");
+  const { summarise } = await import("@/ai/summary");
   const { listCollectionRows, MAX_REQUESTS_PER_DAY, requestCollection } = await import("@/lib/collections");
   const { mockProvider } = await import("@/payments/mock");
 
@@ -141,6 +142,22 @@ describe.skipIf(!enabled)("integration: payment requests and tenant isolation", 
     const other = await loadInsights(b.businessId, await scheduled(b.businessId), "2026-11-01");
     expect(other.totals).toEqual({ expectedCents: 0, receivedCents: 0, outstandingCents: 0 });
     expect(other.parents).toEqual([]);
+
+    // What would go to OpenAI for another business, with its own parent, carries nothing of A's.
+    await createPayer(b, { ...input, parentName: "Sipho Dlamini", childName: "Ayanda", phone: "082 765 4321" });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "Fine." }] }] })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const ai = { AI_SUMMARY_ENABLED: "true", OPENAI_API_KEY: "sk-test-not-a-real-key" }; // gitleaks:allow
+      await summarise(await loadInsights(b.businessId, await scheduled(b.businessId), "2026-11-01"), "en", ai);
+      const body = String(fetchMock.mock.calls[0]![1]!.body);
+      expect(body).toContain("Sipho");
+      for (const leak of ["Thandi", "Mokoena", "Dlamini", "Ayanda", "Lerato", "60000"]) expect(body).not.toContain(leak);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it.each([

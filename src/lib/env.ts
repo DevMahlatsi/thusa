@@ -19,6 +19,11 @@ const envSchema = z.object({
   PUBLIC_BASE_URL: z.string().optional(),
   // Vercel Cron sends it as a bearer token to /api/cron/daily. Unset: the daily job refuses to run.
   CRON_SECRET: z.string().optional(),
+  // AI summary: checked by src/ai/client.ts on use, so a typo there never stops the app.
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().optional(),
+  OPENAI_REASONING_EFFORT: z.string().optional(),
+  AI_SUMMARY_ENABLED: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
