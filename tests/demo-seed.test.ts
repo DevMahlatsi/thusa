@@ -1,8 +1,11 @@
 // The demo crèche's history (src/lib/demo-seed.ts) is worked out from the day it's seeded, so its shape
 // is checked for several days: every state a judge should see is there, and nothing is impossible.
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { MAX_REMINDERS } from "@/lib/reminders";
-import { DEMO_PARENTS, demoPhone, demoStartsOn, planDemoFees, type PlannedFee } from "@/lib/demo-seed";
+import { DEMO_INVITES, DEMO_PARENTS, demoInviteRows, demoPhone, demoStartsOn, planDemoFees, type PlannedFee } from "@/lib/demo-seed";
+import { splitMonthlyFee } from "@/lib/fee-split";
+import { consentText, inviteState } from "@/lib/invites";
+import { payerPhone } from "@/lib/payers";
 import { buildInsights, firstName } from "@/lib/insights";
 import { payerInputSchema } from "@/lib/payers";
 import { normaliseSaMobile } from "@/lib/phone";
@@ -122,5 +125,49 @@ describe.each(DAYS)("demo history seeded on %s", (today) => {
     expect(fees.some((f) => f.byOwner)).toBe(true);
     // A balance is only requested for a part-paid fee.
     expect(fees.filter((f) => f.balanceAt)).toEqual(partPaid);
+  });
+});
+
+describe("demo invites", () => {
+  const ctx = { userId: "user", businessId: "11111111-1111-4111-8111-111111111111" };
+  // Encrypting reads the app's env, which needs a database URL; nothing here connects to one.
+  beforeAll(() => {
+    if (!process.env.DATABASE_URL) vi.stubEnv("DATABASE_URL", "postgresql://unused@localhost/unused");
+  });
+
+  it.each(DAYS)("on %s: two awaiting approval, two open, one expired, all in the past", (day) => {
+    const now = new Date(`${day}T07:00:00+02:00`);
+    const { invites, consents } = demoInviteRows(ctx, now);
+    const states = invites.map((i) => inviteState({ status: i.status ?? "OPEN", expiresAt: i.expiresAt as Date }, now));
+    expect(states.sort()).toEqual(["AWAITING_APPROVAL", "AWAITING_APPROVAL", "EXPIRED", "OPEN", "OPEN"]);
+    for (const i of invites) {
+      expect((i.createdAt as Date).getTime()).toBeLessThan(now.getTime());
+      if (i.submittedAt) {
+        expect((i.submittedAt as Date).getTime()).toBeGreaterThan((i.createdAt as Date).getTime());
+        expect((i.submittedAt as Date).getTime()).toBeLessThan(now.getTime());
+      }
+    }
+    // Every answer has its consent, at the moment it was given.
+    expect(consents.map((c) => c.inviteId).sort()).toEqual(invites.filter((i) => i.submittedAt).map((i) => i.id).sort());
+    for (const c of consents) {
+      expect(c.text).toBe(consentText("Kopano Crèche"));
+      expect(c.consentedAt).toEqual(invites.find((i) => i.id === c.inviteId)!.submittedAt);
+    }
+  });
+
+  it("asks for the server's split of the fee, and only from made-up numbers", () => {
+    const now = new Date("2026-10-26T07:00:00+02:00");
+    const { invites } = demoInviteRows(ctx, now);
+    for (const i of invites.filter((i) => i.rhythm)) expect(i.amountCents).toBe(splitMonthlyFee(i.monthlyAmountCents, i.rhythm!));
+    for (const i of invites) {
+      if (!i.phoneEncrypted) {
+        expect(inviteState({ status: "OPEN", expiresAt: i.expiresAt as Date }, now)).toBe("EXPIRED");
+        continue;
+      }
+      const phone = payerPhone({ businessId: ctx.businessId, phoneEncrypted: i.phoneEncrypted });
+      expect(normaliseSaMobile(phone)).toBeNull();
+      expect(DEMO_PARENTS.map((_, n) => demoPhone(n))).not.toContain(phone);
+    }
+    expect(new Set(DEMO_INVITES.map((i) => i.phone)).size).toBe(DEMO_INVITES.length);
   });
 });

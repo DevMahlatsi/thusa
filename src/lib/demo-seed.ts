@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { MessageKind } from "@/generated/prisma/client";
+import type { MessageKind, Prisma } from "@/generated/prisma/client";
 import { REMINDER_DAYS_AFTER_DUE } from "@/jobs/daily";
 import { renderMessage } from "@/messaging/adapter";
 import type { Language } from "@/messaging/templates/types";
@@ -8,7 +8,8 @@ import { demoLogin } from "./auth/demo";
 import { newReference, reminderKey } from "./collections";
 import type { CollectionStatus, Rhythm } from "./dashboard";
 import { db } from "./db";
-import { newInviteData, type InviteFields } from "./invites";
+import { splitMonthlyFee } from "./fee-split";
+import { consentText, newInviteData, type InviteFields } from "./invites";
 import { mask } from "./logger";
 import { encryptPayerPhone, todayInSa } from "./payers";
 import { addDays, dueDatesInMonth } from "./schedule-dates";
@@ -69,14 +70,41 @@ export const DEMO_PARENTS: readonly DemoParent[] = [
 /** +27000000001, +27000000002, …: shaped like an SA number, but no real mobile number looks like this. */
 export const demoPhone = (index: number) => `+27000000${String(index + 1).padStart(3, "0")}`;
 
-// One open invite link, so judges can see the parent's side: copy the link from Parents > Invite links, open it
-// (any phone), fill it in, then approve it. Single use, so the first judge to fill it in uses it up; making
-// another takes a few seconds. Its number is made up like the other demo parents'.
-export const DEMO_INVITE: InviteFields = {
-  phone: demoPhone(DEMO_PARENTS.length),
-  childName: "Naledi",
-  monthlyAmountCents: 145_000,
+// Invite links the owner has sent, in every state the parents page shows, so judges find the flow part-way:
+// two parents awaiting approval, two links not used yet (either can be opened with "See what the parent sees"
+// and filled in; single use, so the first judge to do it uses it up), and one that expired unused. Numbers are
+// made up like the other demo parents'. Times are SA times, `sentDaysAgo` days before the reset.
+type DemoInvite = InviteFields & {
+  sentDaysAgo: number;
+  sentAt: string;
+  // A parent who used the link. Their answers wait for the owner's approval.
+  answered?: { parentName: string; language: Language; rhythm: Rhythm; payday: number; daysAfterSent: number; at: string };
 };
+
+const invitePhone = (n: number) => demoPhone(DEMO_PARENTS.length + n);
+
+export const DEMO_INVITES: readonly DemoInvite[] = [
+  {
+    phone: invitePhone(0),
+    childName: "Amahle",
+    monthlyAmountCents: 145_000,
+    sentDaysAgo: 3,
+    sentAt: "08:15",
+    answered: { parentName: "Zanele Mthembu", language: "zu", rhythm: "WEEKLY", payday: 5, daysAfterSent: 1, at: "19:42" },
+  },
+  {
+    phone: invitePhone(1),
+    childName: "Tumelo",
+    monthlyAmountCents: 150_000,
+    sentDaysAgo: 2,
+    sentAt: "07:50",
+    answered: { parentName: "Lebohang Mofokeng", language: "st", rhythm: "FORTNIGHTLY", payday: 4, daysAfterSent: 0, at: "12:15" },
+  },
+  { phone: invitePhone(2), childName: "Liam", monthlyAmountCents: 160_000, sentDaysAgo: 4, sentAt: "14:05" },
+  { phone: invitePhone(3), childName: "Naledi", monthlyAmountCents: 145_000, sentDaysAgo: 1, sentAt: "17:30" },
+  // Expired two days ago: the parent never opened it.
+  { phone: invitePhone(4), childName: "Kamogelo", monthlyAmountCents: 145_000, sentDaysAgo: 9, sentAt: "09:10" },
+];
 
 /** A time on a South African date (always +02:00: no daylight saving). */
 const at = (ymd: string, hhmm: string) => new Date(`${ymd}T${hhmm}:00+02:00`);
@@ -174,6 +202,45 @@ export function planDemoFees(today: string): PlannedFee[] {
   });
 }
 
+/**
+ * The demo invites as of `now`, and a consent for each one a parent has answered. The links' secrets are new
+ * every time. An expired link has no number, as the daily job leaves it.
+ */
+export function demoInviteRows(ctx: { userId: string; businessId: string }, now: Date) {
+  const today = todayInSa(now);
+  const invites: Prisma.PayerInviteCreateManyInput[] = [];
+  const consents: Prisma.MessagingConsentCreateManyInput[] = [];
+  for (const invite of DEMO_INVITES) {
+    const sentDay = addDays(today, -invite.sentDaysAgo);
+    const sentAt = at(sentDay, invite.sentAt);
+    const row = { id: randomUUID(), ...newInviteData(ctx, invite, sentAt), createdAt: sentAt };
+    const answer = invite.answered;
+    if (!answer) {
+      invites.push(row.expiresAt <= now ? { ...row, phoneEncrypted: null } : row);
+      continue;
+    }
+    const submittedAt = at(addDays(sentDay, answer.daysAfterSent), answer.at);
+    invites.push({
+      ...row,
+      status: "SUBMITTED",
+      parentName: answer.parentName,
+      language: answer.language,
+      rhythm: answer.rhythm,
+      payday: answer.payday,
+      amountCents: splitMonthlyFee(invite.monthlyAmountCents, answer.rhythm),
+      submittedAt,
+    });
+    consents.push({
+      businessId: ctx.businessId,
+      inviteId: row.id,
+      text: consentText(DEMO_BUSINESS.name),
+      consentedAt: submittedAt,
+      createdAt: submittedAt,
+    });
+  }
+  return { invites, consents };
+}
+
 /** References no collection or balance request has yet. */
 async function freshReferences(count: number): Promise<string[]> {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -259,7 +326,9 @@ export async function resetDemoAccount(now = new Date()): Promise<DemoResetSumma
       await tx.user.update({ where: { id: user.id }, data: { businessId, role: "OWNER" } });
       await tx.payer.createMany({ data: payers });
       await tx.schedule.createMany({ data: schedules });
-      await tx.payerInvite.create({ data: newInviteData({ userId: user.id, businessId }, DEMO_INVITE, now) });
+      const seededInvites = demoInviteRows({ userId: user.id, businessId }, now);
+      await tx.payerInvite.createMany({ data: seededInvites.invites });
+      await tx.messagingConsent.createMany({ data: seededInvites.consents });
 
       const collections = [];
       const ledger = [];
@@ -366,7 +435,7 @@ export async function resetDemoAccount(now = new Date()): Promise<DemoResetSumma
         fees: collections.length,
         payments: ledger.length,
         messages: messages.length,
-        invites: 1,
+        invites: DEMO_INVITES.length,
         archivedParents: archived.count,
       };
     },

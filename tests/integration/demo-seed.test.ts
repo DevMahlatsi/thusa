@@ -101,27 +101,35 @@ describe.skipIf(!enabled)("integration: demo account reset", async () => {
     expect(await db().collection.count({ where: { businessId: old.id } })).toBe(0);
   });
 
-  it("seeds one open invite link, and closes the old demo's links on the next reset", async () => {
-    const { DEMO_INVITE } = await import("@/lib/demo-seed");
-    const { joinInputSchema, submitInvite } = await import("@/lib/invites");
+  it("seeds invites in every state the parents page shows, which a judge can approve or fill in", async () => {
+    const { DEMO_INVITES } = await import("@/lib/demo-seed");
+    const { approveInvite, joinInputSchema, listPendingInvites, submitInvite, toInviteDto, inviteShare } = await import("@/lib/invites");
     const first = (await resetDemoAccount(now))!;
-    expect(first.invites).toBe(1);
-    const seeded = await db().payerInvite.findMany({ where: { businessId: first.businessId } });
-    expect(seeded).toMatchObject([{ status: "OPEN", childName: DEMO_INVITE.childName, monthlyAmountCents: DEMO_INVITE.monthlyAmountCents }]);
-    expect(seeded[0]!.expiresAt.getTime()).toBeGreaterThan(now.getTime());
+    expect(first.invites).toBe(DEMO_INVITES.length);
 
-    // A judge fills in one more link on the old demo, then the reset runs.
+    const listed = (await listPendingInvites(first.businessId, now)).map((i) => toInviteDto(i, now));
+    expect(listed.map((i) => i.state).sort()).toEqual(["AWAITING_APPROVAL", "AWAITING_APPROVAL", "EXPIRED", "OPEN", "OPEN"]);
+    expect(await db().messagingConsent.count({ where: { businessId: first.businessId } })).toBe(2);
+    expect(listed.find((i) => i.state === "EXPIRED")?.phoneMasked).toBeNull();
+
+    // A judge approves one parent, and plays the parent on an open link.
     const user = await db().user.findUniqueOrThrow({ where: { phoneE164: DEMO } });
-    const { createInvite, inviteShare } = await import("@/lib/invites");
-    const used = await createInvite({ userId: user.id, businessId: first.businessId }, { ...DEMO_INVITE, phone: "+27821234567", parentAgreed: true }, now);
-    const token = inviteShare({ ...used, consent: null }, "x", "https://mythusa.vercel.app").link.split("/join/")[1]!;
-    const answers = { token, parentName: "A Judge", rhythm: "WEEKLY", payday: 5, language: "en", consent: true };
-    await submitInvite(joinInputSchema.parse(answers), now);
+    const ctx = { userId: user.id, businessId: first.businessId };
+    const awaiting = listed.find((i) => i.state === "AWAITING_APPROVAL")!;
+    const payer = await approveInvite(ctx, awaiting.id, now);
+    expect(payer.schedule).toMatchObject({ amountCents: awaiting.answers!.amountCents, rhythm: awaiting.answers!.rhythm });
+    const open = (await db().payerInvite.findMany({ where: { businessId: first.businessId, status: "OPEN", expiresAt: { gt: now } } }))[0]!;
+    const token = inviteShare({ ...open, consent: null }, "x", "https://mythusa.vercel.app").link.split("/join/")[1]!;
+    await submitInvite(joinInputSchema.parse({ token, parentName: "A Judge", rhythm: "WEEKLY", payday: 5, language: "en", consent: true }), now);
 
+    // The next reset closes all of the old demo's links and clears answers nobody approved.
     const second = (await resetDemoAccount(new Date("2026-10-25T07:00:00+02:00")))!;
-    expect(await db().payerInvite.findUniqueOrThrow({ where: { id: seeded[0]!.id } })).toMatchObject({ status: "CANCELLED", phoneEncrypted: null });
-    expect(await db().payerInvite.findUniqueOrThrow({ where: { id: used.id } })).toMatchObject({ status: "DECLINED", parentName: null, phoneEncrypted: null });
-    expect(await db().payerInvite.count({ where: { businessId: second.businessId, status: "OPEN" } })).toBe(1);
+    const old = await db().payerInvite.findMany({ where: { businessId: first.businessId } });
+    expect(old.filter((i) => i.status === "OPEN")).toEqual([]);
+    expect(old.filter((i) => i.status === "CANCELLED").every((i) => i.phoneEncrypted === null)).toBe(true);
+    expect(old.filter((i) => i.status === "DECLINED").every((i) => i.parentName === null && i.phoneEncrypted === null)).toBe(true);
+    expect(old.find((i) => i.id === awaiting.id)).toMatchObject({ status: "APPROVED", payerId: payer.id });
+    expect(await db().payerInvite.count({ where: { businessId: second.businessId } })).toBe(DEMO_INVITES.length);
   });
 
   it("leaves other businesses alone", async () => {
