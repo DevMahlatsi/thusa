@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { WhosPaid } from "@/components/dashboard/whos-paid";
-import { CollectionsIcon, InfoIcon, OverviewIcon, ParentsIcon, RemindersIcon } from "@/components/icons";
+import {
+  CheckIcon,
+  CollectionsIcon,
+  CrossIcon,
+  InfoIcon,
+  OverviewIcon,
+  ParentsIcon,
+  RemindersIcon,
+} from "@/components/icons";
 import { PublicHeader } from "@/components/public-header";
 import { getCurrentUser } from "@/lib/auth";
 import { demoLogin } from "@/lib/auth/demo";
@@ -41,6 +49,35 @@ const STEPS = [
     body: "A friendly WhatsApp or SMS in English, isiZulu, Sesotho or Setswana. Never a late fee.",
   },
 ];
+
+// Compared by category, never by named product: one wrong mark next to a brand reads as misleading.
+// Honest ticks where other tools do well. Re-check against public product info before changing the date.
+type Mark = "yes" | "no" | "partly";
+
+const COMPARE_COLUMNS = ["Debit orders", "Payment links & gateways", "School fee apps", "Thusa"];
+const THUSA_COLUMN = COMPARE_COLUMNS.length - 1;
+
+const COMPARE: { feature: string; marks: [Mark, Mark, Mark, Mark] }[] = [
+  { feature: "Collects on each customer's own payday", marks: ["no", "no", "no", "yes"] },
+  { feature: "Splits a monthly fee into weekly instalments", marks: ["no", "partly", "partly", "yes"] },
+  { feature: "Messages in isiZulu, Sesotho and Setswana", marks: ["no", "no", "no", "yes"] },
+  { feature: "Tracks part-payments without penalties", marks: ["no", "partly", "partly", "yes"] },
+  { feature: "Payer can pay from any bank", marks: ["partly", "yes", "yes", "yes"] },
+  { feature: "Matches payments automatically", marks: ["yes", "yes", "yes", "yes"] },
+  { feature: "Shows who to reward and who to support", marks: ["no", "no", "no", "yes"] },
+  { feature: "Built for informal crèches, no merchant account needed", marks: ["no", "no", "no", "yes"] },
+];
+
+// Shape plus words (visible or sr-only), never colour alone.
+function CompareMark({ mark }: { mark: Mark }) {
+  if (mark === "partly") return <span className="mark partly">Partly</span>;
+  return (
+    <span className={`mark ${mark}`}>
+      {mark === "yes" ? <CheckIcon size={18} /> : <CrossIcon size={18} />}
+      <span className="sr-only">{mark === "yes" ? "Yes" : "No"}</span>
+    </span>
+  );
+}
 
 const FEATURES = [
   {
@@ -110,9 +147,10 @@ export default async function Home() {
                 See how it works
               </a>
             </div>
-            {hasDemo && (
-              <p className="muted small">Judging Thusa? The demo phone number and code are on the login page.</p>
-            )}
+            <div className="hero-notes muted small">
+              <p>Piloting with crèches first.</p>
+              {hasDemo && <p>Judging Thusa? The demo phone number and code are on the login page.</p>}
+            </div>
           </div>
           <div className="hero-preview" aria-label="Preview of the Who's paid panel, with sample data">
             <WhosPaid parents={preview} isSample />
@@ -157,6 +195,51 @@ export default async function Home() {
               </li>
             ))}
           </ol>
+        </section>
+
+        <section className="landing-wrap landing-section" aria-labelledby="compare-title">
+          <div className="section-intro">
+            <h2 id="compare-title">How Thusa compares</h2>
+            <p className="muted">The usual ways to collect fees, side by side.</p>
+          </div>
+          <div className="compare-wrap">
+            <table className="compare">
+              <caption className="sr-only">
+                Thusa compared with debit orders, payment links and gateways, and school fee apps
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span className="sr-only">Feature</span>
+                  </th>
+                  {COMPARE_COLUMNS.map((c, i) => (
+                    <th scope="col" key={c} className={i === THUSA_COLUMN ? "thusa" : undefined}>
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARE.map((row) => (
+                  <tr key={row.feature}>
+                    <th scope="row">{row.feature}</th>
+                    {row.marks.map((m, i) => (
+                      <td
+                        key={COMPARE_COLUMNS[i]}
+                        data-label={COMPARE_COLUMNS[i]}
+                        className={i === THUSA_COLUMN ? "thusa" : undefined}
+                      >
+                        <CompareMark mark={m} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="muted small">
+            Based on publicly available information about typical products in each category, October 2026.
+          </p>
         </section>
 
         <section className="landing-wrap landing-section" aria-labelledby="features-title">

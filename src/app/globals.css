@@ -753,6 +753,12 @@ label.check input {
   gap: 0.75rem;
 }
 
+.hero-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 .landing-section {
   display: flex;
   flex-direction: column;
@@ -809,6 +815,148 @@ label.check input {
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.25rem;
+}
+
+/* "How Thusa compares": the Thusa column is the lime highlight (soft tint, dark marks). */
+.compare-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+
+.compare thead th {
+  padding: 0.75rem;
+  background: var(--canvas);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  vertical-align: bottom;
+  border-bottom: 1px solid var(--border);
+}
+
+.compare thead th:first-child {
+  width: 36%;
+}
+
+.compare thead th.thusa {
+  background: var(--accent);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.compare tbody th {
+  padding: 0.85rem 1.25rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.compare td {
+  padding: 0.85rem 0.75rem;
+  text-align: center;
+}
+
+.compare tbody tr + tr > * {
+  border-top: 1px solid var(--border);
+}
+
+.compare td.thusa {
+  background: var(--accent-soft);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.mark.no {
+  color: var(--muted);
+}
+
+.mark.partly {
+  color: var(--pending-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* Phones: each row becomes its own card, with the category written next to each mark. */
+@media (max-width: 719px) {
+  .compare-wrap {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .compare,
+  .compare tbody,
+  .compare tr,
+  .compare th {
+    display: block;
+  }
+
+  .compare thead {
+    display: none;
+  }
+
+  .compare tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .compare tbody tr {
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+  }
+
+  .compare tbody tr + tr > th {
+    border-top: 0;
+  }
+
+  .compare tbody th {
+    padding: 0 0 0.5rem;
+    font-weight: 600;
+  }
+
+  .compare td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border);
+    text-align: left;
+  }
+
+  .compare td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .compare td.thusa {
+    margin-top: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-top: 0;
+    border-radius: var(--radius-control);
+  }
+
+  .compare td.thusa::before {
+    color: var(--text);
+    font-weight: 600;
+  }
 }
 
 .features {

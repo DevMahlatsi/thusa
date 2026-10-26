@@ -71,6 +71,12 @@ export const CheckIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const CrossIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
+  </Svg>
+);
+
 export const InfoIcon = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="9" />
