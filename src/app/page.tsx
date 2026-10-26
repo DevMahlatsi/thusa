@@ -151,6 +151,9 @@ export default async function Home() {
             <div className="hero-notes muted small">
               <p>Piloting with crèches first.</p>
               {hasDemo && <p>Judging Thusa? The demo phone number and code are on the login page.</p>}
+              <p>
+                <Link href="/whats-new">What&apos;s new</Link>
+              </p>
             </div>
           </div>
           <div className="hero-preview" aria-label="Preview of the Who's paid panel, with sample data">
