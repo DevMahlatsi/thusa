@@ -4,6 +4,8 @@ Owner app (Next.js) → API routes → PostgreSQL (Prisma)
 Scheduler (Vercel Cron → /api/cron/daily; pg-boss later) → payments adapter → Stitch sandbox (FNB later)
 Provider webhook → /api/webhooks/payments → verify signature → dedupe → match → ledger → notify
 Messaging adapter → WhatsApp/SMS (stubbed in dev)
+Parent invite: owner makes a link → parent's answers + consent wait on the invite (/join, public, rate-limited)
+→ owner approves → Payer + Schedule. Nothing is sent to a parent before approval.
 
 ## Folders
 - src/app/            Next.js routes and pages
@@ -24,4 +26,5 @@ getPaymentStatus(reference)
 
 ## Core tables
 Business, User, Payer, Schedule, Collection, BalanceRequest, LedgerEntry, WebhookEvent (unique eventId),
-Message (every message to a parent, unique dedupe key), AuditLog
+Message (every message to a parent, unique dedupe key), PayerInvite (single-use link, the parent's answers until
+approval), MessagingConsent (append-only), RateLimitHit (public endpoints), AuditLog

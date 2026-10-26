@@ -67,6 +67,8 @@ model Business {
   balanceRequests BalanceRequest[]
   messages        Message[]
   aiSummaries     AiSummary[]
+  payerInvites    PayerInvite[]
+  consents        MessagingConsent[]
 }
 
 model User {
@@ -132,6 +134,8 @@ model Payer {
 
   schedule    Schedule?
   collections Collection[]
+  // Set when the parent added themselves through an invite link.
+  invite      PayerInvite?
 
   // Lets Schedule reference (id, businessId), so a schedule can't point at another business's payer.
   @@unique([id, businessId])
@@ -352,6 +356,98 @@ model AiSummary {
 
   @@index([businessId, createdAt])
   @@index([businessId, language, periodStart, createdAt])
+}
+
+enum InviteStatus {
+  // The link is out; the parent hasn't used it yet.
+  OPEN
+  // The parent filled it in: "Awaiting approval". There is no Payer yet, so nothing can be sent to them.
+  SUBMITTED
+  // The owner approved: payerId is the parent it became.
+  APPROVED
+  // The owner turned the answers down. The parent's name and phone are cleared.
+  DECLINED
+  // Withdrawn before the parent used it.
+  CANCELLED
+}
+
+// A single-use link a parent opens to add themselves (src/lib/invites.ts). The owner sets the child, the
+// monthly fee and which rhythms the parent may choose; the parent gives their name, phone, rhythm, payday and
+// language. Their answers wait here and only become a Payer with a Schedule when the owner approves, so no
+// payment request or reminder can reach a parent who isn't approved. Expires 7 days after it was made.
+model PayerInvite {
+  id                 String            @id @default(uuid())
+  businessId         String
+  business           Business          @relation(fields: [businessId], references: [id])
+  // SHA-256 of the link's secret, to find the invite from the link. Never logged.
+  tokenHash          String            @unique
+  // The secret itself, AES-256-GCM bound to businessId, so the owner can copy the link again.
+  tokenEncrypted     String
+  // The parent's cellphone, given by the owner. Uses the payer phone's encryption context, so approval copies
+  // it to the Payer as it is. Cleared when the answers are declined, or the link is cancelled or expires unused.
+  phoneEncrypted     String?
+  childName          String
+  // Per month, set by the owner. The weekly and fortnightly amounts are worked out from it on the server
+  // (src/lib/fee-split.ts); the parent never sends an amount. CHECK > 0 in the migration.
+  monthlyAmountCents Int
+  // The rhythms the parent was offered (all three for now). At least one, CHECKed in the migration.
+  allowedRhythms     Rhythm[]
+  status             InviteStatus      @default(OPEN)
+  expiresAt          DateTime
+  createdByUserId    String?
+
+  // The parent's answers, null until they submit. amountCents is per collection, from monthlyAmountCents and
+  // rhythm: the migration CHECKs the sum, and that rhythm is one of allowedRhythms.
+  parentName         String?
+  language           Language?
+  rhythm             Rhythm?
+  payday             Int?
+  amountCents        Int?
+  submittedAt        DateTime?
+
+  // The owner's approval, decline or cancel.
+  decidedAt          DateTime?
+  decidedByUserId    String?
+  payerId            String?           @unique
+  payer              Payer?            @relation(fields: [payerId], references: [id], onDelete: Restrict)
+  consent            MessagingConsent?
+
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  // Lets MessagingConsent reference (id, businessId), so a consent can't point at another business's invite.
+  @@unique([id, businessId])
+  @@index([businessId, status, createdAt])
+}
+
+// A parent's agreement to be messaged, ticked on the invite page: the exact words they agreed to, when, and
+// which invite (and so which business and, once approved, which payer). Kept as evidence: a trigger in the
+// migration refuses UPDATE and DELETE.
+model MessagingConsent {
+  id          String      @id @default(uuid())
+  businessId  String
+  business    Business    @relation(fields: [businessId], references: [id])
+  inviteId    String      @unique
+  invite      PayerInvite @relation(fields: [inviteId, businessId], references: [id, businessId])
+  text        String
+  consentedAt DateTime
+  createdAt   DateTime    @default(now())
+
+  // One consent per invite. inviteId is unique on its own too, so this is only for the foreign key.
+  @@unique([inviteId, businessId])
+  @@index([businessId])
+}
+
+// One row per request a public endpoint let through, for its rate limits (src/lib/rate-limit.ts). Only a
+// keyed hash of what is counted (an IP, an invite link) is kept. The daily job deletes old rows.
+model RateLimitHit {
+  id        String   @id @default(uuid())
+  bucket    String
+  keyHash   String
+  createdAt DateTime @default(now())
+
+  @@index([bucket, keyHash, createdAt])
+  @@index([createdAt])
 }
 
 model AuditLog {

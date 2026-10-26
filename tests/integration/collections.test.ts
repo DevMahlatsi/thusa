@@ -40,12 +40,13 @@ describe.skipIf(!enabled)("integration: payment requests and tenant isolation", 
 
   beforeEach(async () => {
     await db().auditLog.deleteMany();
-    // The ledger refuses DELETE (append-only); TRUNCATE is how tests clear it.
-    await db().$executeRaw`TRUNCATE "LedgerEntry", "WebhookEvent"`;
+    // The ledger and consents refuse DELETE (append-only); TRUNCATE is how tests clear them.
+    await db().$executeRaw`TRUNCATE "LedgerEntry", "WebhookEvent", "MessagingConsent"`;
     await db().message.deleteMany();
     await db().balanceRequest.deleteMany();
     await db().collection.deleteMany();
     await db().schedule.deleteMany();
+    await db().payerInvite.deleteMany();
     await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandIcon, Wordmark } from "@/components/brand";
+import { LegalLinks } from "@/components/legal-links";
 import { LogoutButton } from "@/components/logout-button";
 import { BottomNav, PageTitle, SidebarNav } from "@/components/shell/nav";
 import { requirePageBusinessUser } from "@/lib/auth";
@@ -46,7 +47,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <LogoutButton />
           </div>
         </header>
-        <main className="content">{children}</main>
+        <main className="content">
+          {children}
+          {/* Inside main, so on phones it stays clear of the fixed bottom nav. */}
+          <LegalLinks className="centred app-legal" />
+        </main>
       </div>
 
       <BottomNav />

@@ -8,6 +8,7 @@ import { demoLogin } from "./auth/demo";
 import { newReference, reminderKey } from "./collections";
 import type { CollectionStatus, Rhythm } from "./dashboard";
 import { db } from "./db";
+import { newInviteData, type InviteFields } from "./invites";
 import { mask } from "./logger";
 import { encryptPayerPhone, todayInSa } from "./payers";
 import { addDays, dueDatesInMonth } from "./schedule-dates";
@@ -67,6 +68,15 @@ export const DEMO_PARENTS: readonly DemoParent[] = [
 
 /** +27000000001, +27000000002, …: shaped like an SA number, but no real mobile number looks like this. */
 export const demoPhone = (index: number) => `+27000000${String(index + 1).padStart(3, "0")}`;
+
+// One open invite link, so judges can see the parent's side: copy the link from Parents > Invite links, open it
+// (any phone), fill it in, then approve it. Single use, so the first judge to fill it in uses it up; making
+// another takes a few seconds. Its number is made up like the other demo parents'.
+export const DEMO_INVITE: InviteFields = {
+  phone: demoPhone(DEMO_PARENTS.length),
+  childName: "Naledi",
+  monthlyAmountCents: 145_000,
+};
 
 /** A time on a South African date (always +02:00: no daylight saving). */
 const at = (ymd: string, hhmm: string) => new Date(`${ymd}T${hhmm}:00+02:00`);
@@ -185,6 +195,7 @@ export type DemoResetSummary = {
   fees: number;
   payments: number;
   messages: number;
+  invites: number;
   archivedParents: number;
 };
 
@@ -233,10 +244,22 @@ export async function resetDemoAccount(now = new Date()): Promise<DemoResetSumma
       const archived = user.businessId
         ? await tx.payer.updateMany({ where: { businessId: user.businessId, archivedAt: null }, data: { archivedAt: now } })
         : { count: 0 };
+      if (user.businessId) {
+        // The old demo's links stop working, and answers nobody approved are cleared, as a decline would.
+        await tx.payerInvite.updateMany({
+          where: { businessId: user.businessId, status: "OPEN" },
+          data: { status: "CANCELLED", phoneEncrypted: null, decidedAt: now },
+        });
+        await tx.payerInvite.updateMany({
+          where: { businessId: user.businessId, status: "SUBMITTED" },
+          data: { status: "DECLINED", parentName: null, phoneEncrypted: null, decidedAt: now },
+        });
+      }
       await tx.business.create({ data: { id: businessId, ...DEMO_BUSINESS } });
       await tx.user.update({ where: { id: user.id }, data: { businessId, role: "OWNER" } });
       await tx.payer.createMany({ data: payers });
       await tx.schedule.createMany({ data: schedules });
+      await tx.payerInvite.create({ data: newInviteData({ userId: user.id, businessId }, DEMO_INVITE, now) });
 
       const collections = [];
       const ledger = [];
@@ -343,6 +366,7 @@ export async function resetDemoAccount(now = new Date()): Promise<DemoResetSumma
         fees: collections.length,
         payments: ledger.length,
         messages: messages.length,
+        invites: 1,
         archivedParents: archived.count,
       };
     },

@@ -3,8 +3,10 @@ import { requestBalance } from "@/lib/balance-requests";
 import { requestCollection } from "@/lib/collections";
 import { db } from "@/lib/db";
 import { HttpError } from "@/lib/http";
+import { clearExpiredInvitePhones } from "@/lib/invites";
 import { logger } from "@/lib/logger";
 import { todayInSa } from "@/lib/payers";
+import { pruneRateLimitHits } from "@/lib/rate-limit";
 import { sendReminder } from "@/lib/reminders";
 import { addDays, dueDatesInMonth } from "@/lib/schedule-dates";
 
@@ -12,6 +14,7 @@ import { addDays, dueDatesInMonth } from "@/lib/schedule-dates";
 //   1. a payment request to every parent whose payday is today;
 //   2. a reminder 2 and 7 days after a due date that isn't paid. A part-paid fee gets its balance
 //      requested instead, which sends the parent the balance link.
+// Parents awaiting approval (src/lib/invites.ts) aren't payers yet, so neither step can reach them.
 // There's no logged-in owner here, so the job looks across businesses and then acts for each row's own
 // businessId, through the same functions (and limits) as the owner's buttons. Everything it does is
 // idempotent: a second run on the same day sends nothing new.
@@ -92,6 +95,11 @@ export async function runDailyJobs(now = new Date()): Promise<DailySummary> {
       await attempt("reminders", c.id, async () => Boolean(await sendReminder(ctx, c.id, now)));
     }
   }
+
+  // Housekeeping: rate-limit counts older than any window needs, and parents' numbers on links that expired
+  // unused. Never stops the run.
+  await pruneRateLimitHits(now).catch((err) => logger.error("jobs.rate_limit_prune_failed", { error: err }));
+  await clearExpiredInvitePhones(now).catch((err) => logger.error("jobs.invite_phone_clear_failed", { error: err }));
 
   await audit({ action: "jobs.daily_run", metadata: { today, ...summary } });
   logger.info("jobs.daily_run", { today, ...summary });

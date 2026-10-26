@@ -16,4 +16,6 @@ export const st: TemplateSet = {
     `Kgopotso e tswang ho ${businessName(p)}: tefo ya ${childName(p)} ya ${smsRand(p.amountCents)} e ne e lokela ka ${smsDate(p.dueDate)}. ${pay(p)} Haeba o se o lefile, re a leboha. ${SAFETY}`,
   balance_request: (p) =>
     `${businessName(p)}: re a leboha ka tefo ya ${smsRand(p.paidCents)} bakeng sa ${childName(p)}. Se setseng ke ${smsRand(p.amountCents)}. ${pay(p)} ${SAFETY}`,
+  parent_invite: (p) =>
+    `${businessName(p)} e sebedisa Thusa ho bokella ditefo. Kenya dintlha bakeng sa ${childName(p)} mme o kgethe hore o lefa neng: ${p.link} Lehokela le sebetsa hang feela, ho fihlela ka ${smsDate(p.expiresOn)}. ${SAFETY}`,
 };

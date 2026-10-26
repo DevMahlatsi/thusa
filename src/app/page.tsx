@@ -10,6 +10,7 @@ import {
   ParentsIcon,
   RemindersIcon,
 } from "@/components/icons";
+import { LegalLinks } from "@/components/legal-links";
 import { PublicHeader } from "@/components/public-header";
 import { getCurrentUser } from "@/lib/auth";
 import { demoLogin } from "@/lib/auth/demo";
@@ -302,6 +303,7 @@ export default async function Home() {
           <em>Thusa</em> means &ldquo;help&rdquo; in Sesotho and Setswana. Thusa will never ask for your PIN or banking
           password.
         </p>
+        <LegalLinks />
       </footer>
     </div>
   );

@@ -8,6 +8,20 @@ export type Language = (typeof LANGUAGES)[number];
  */
 export type PaymentLink = string & { readonly __brand: "PaymentLink" };
 
+/**
+ * A Thusa invite page URL (https, Thusa's own host, /join/<secret>). Only `inviteLink` in src/lib/invites.ts
+ * makes one, so the invite message can't carry any other link.
+ */
+export type InviteLink = string & { readonly __brand: "InviteLink" };
+
+/** The message an owner sends a parent with their invite link. Thusa shows it; the owner sends it. */
+export type InviteParams = {
+  business: string;
+  child: string;
+  link: InviteLink;
+  expiresOn: string; // YYYY-MM-DD, South African date
+};
+
 /** One fee, as a parent sees it. Amounts in integer cents; the template formats them. */
 export type FeeParams = {
   business: string;
@@ -26,11 +40,12 @@ export type TemplateParams = {
   payment_reminder: FeeParams;
   // amountCents is the balance still owed; paidCents what the parent has paid so far.
   balance_request: FeeParams & { paidCents: number };
+  parent_invite: InviteParams;
 };
 
 export type TemplateKey = keyof TemplateParams;
 
-/** The templates about a fee, sent to parents. (The login code goes to owners.) */
-export type FeeTemplateKey = Exclude<TemplateKey, "otp">;
+/** The templates about a fee, sent to parents. (The login code goes to owners; owners send invites themselves.) */
+export type FeeTemplateKey = Exclude<TemplateKey, "otp" | "parent_invite">;
 
 export type TemplateSet = { [K in TemplateKey]: (params: TemplateParams[K]) => string };

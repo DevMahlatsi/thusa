@@ -17,4 +17,6 @@ export const zu: TemplateSet = {
     `Isikhumbuzi esivela ku-${businessName(p)}: imali ka-${childName(p)} engu-${smsRand(p.amountCents)} ibikhokhwa ngo-${smsDate(p.dueDate)}. ${pay(p)} Uma usukhokhile, siyabonga. ${SAFETY}`,
   balance_request: (p) =>
     `${businessName(p)}: siyabonga ngokukhokha u-${smsRand(p.paidCents)} ka-${childName(p)}. Okusele ngu-${smsRand(p.amountCents)}. ${pay(p)} ${SAFETY}`,
+  parent_invite: (p) =>
+    `${businessName(p)} isebenzisa i-Thusa ukuqoqa imali. Faka imininingwane ka-${childName(p)}, ukhethe ukuthi uzokhokha nini: ${p.link} Isixhumanisi sisebenza kanye, kuze kube ngu-${smsDate(p.expiresOn)}. ${SAFETY}`,
 };

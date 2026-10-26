@@ -20,7 +20,9 @@ moves), and messages to parents are shown in the app, not sent. The account rese
 ### What to try
 
 1. **Overview:** expected vs received, Who's paid, and "This week in plain words".
-2. **Parents → Add parent:** choose **Weekly** and a payday, and pick a message language.
+2. **Parents → Add parent:** choose **Weekly** and a payday, and pick a message language. Or open the
+   invite under **Invite links**, click **See what the parent sees**, fill it in as the parent, then come back
+   to **Parents** and **Approve** it.
 3. **Collections:** click **Send request**, pay on the Stitch sandbox page, and watch the row turn **Paid**.
 4. **Messages:** see payment requests and reminders in isiZulu, Sesotho and Setswana.
 5. **Overview:** switch the AI summary between languages.
@@ -35,6 +37,8 @@ reminders. Parents never pay Thusa fees, and there are no late fees.
 ## Features
 
 - **Payday-based schedules:** weekly, fortnightly or monthly, per customer (for example "every Wednesday").
+- **Parents add themselves** from a single-use invite link: they choose weekly, fortnightly or monthly
+  (the amount is worked out by Thusa), their payday and language, and agree to messages. The owner approves.
 - **Payment links from any bank** through the Stitch sandbox (FNB APIs next).
 - **Automatic matching:** a payment is marked **Paid** only from a verified provider event.
 - **Part-payments** with the balance tracked.

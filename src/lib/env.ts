@@ -17,6 +17,8 @@ const envSchema = z.object({
   STITCH_CLIENT_SECRET: z.string().optional(),
   STITCH_WEBHOOK_SECRET: z.string().optional(),
   PUBLIC_BASE_URL: z.string().optional(),
+  // Shown on /terms and /privacy for questions and requests. Not a secret; checked by src/lib/legal.ts.
+  CONTACT_EMAIL: z.string().optional(),
   // Vercel Cron sends it as a bearer token to /api/cron/daily. Unset: the daily job refuses to run.
   CRON_SECRET: z.string().optional(),
   // AI summary: checked by src/ai/client.ts on use, so a typo there never stops the app.

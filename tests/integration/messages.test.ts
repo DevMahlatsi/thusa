@@ -60,11 +60,12 @@ describe.skipIf(!enabled)("integration: messages, reminders, part-payments and t
 
   beforeEach(async () => {
     await db().auditLog.deleteMany();
-    await db().$executeRaw`TRUNCATE "LedgerEntry", "WebhookEvent"`;
+    await db().$executeRaw`TRUNCATE "LedgerEntry", "WebhookEvent", "MessagingConsent"`;
     await db().message.deleteMany();
     await db().balanceRequest.deleteMany();
     await db().collection.deleteMany();
     await db().schedule.deleteMany();
+    await db().payerInvite.deleteMany();
     await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();

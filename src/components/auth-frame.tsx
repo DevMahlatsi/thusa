@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { LegalLinks } from "./legal-links";
 import { PublicHeader } from "./public-header";
 
 // Shared frame for pages outside the app shell (login, onboarding). The optional aside sits beside
 // the form on desktop and is hidden on smaller screens, where the form is all that matters.
+// The legal links stay on every screen size, even where the aside hides the footer text.
 export function AuthFrame({
   children,
   aside,
@@ -25,6 +27,7 @@ export function AuthFrame({
           <p className="auth-footer">
             Thusa will never ask for your PIN or banking password. Parents never pay Thusa fees.
           </p>
+          <LegalLinks />
         </div>
         {aside && <aside className="auth-aside">{aside}</aside>}
       </main>

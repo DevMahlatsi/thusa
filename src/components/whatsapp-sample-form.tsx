@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { sendJson } from "./api-client";
+import { ConsentLinks } from "./legal-links";
 
 type Sent = { message: { status: string; phoneMasked: string } };
 
@@ -77,13 +78,16 @@ export function WhatsAppSampleForm({ collectionId }: { collectionId: string }) {
             maxLength={20}
           />
         </div>
-        <label className="check" htmlFor="sample-consent">
-          <input id="sample-consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          <span>
-            I agree to get this one WhatsApp message from Thusa. Thusa won&apos;t keep my number (only its last four
-            digits, and a one-way code that limits repeats) or message me again.
-          </span>
-        </label>
+        <div>
+          <label className="check" htmlFor="sample-consent">
+            <input id="sample-consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            <span>
+              I agree to get this one WhatsApp message from Thusa. Thusa won&apos;t keep my number (only its last four
+              digits, and a one-way code that limits repeats) or message me again.
+            </span>
+          </label>
+          <ConsentLinks />
+        </div>
       </fieldset>
       {error && (
         <p className="message problem" role="alert">

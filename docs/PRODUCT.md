@@ -11,6 +11,7 @@ ECD Census 2021: 42,420 programmes, ~70% rely mainly on fees (avg ~R509/child/mo
 
 ## Key features
 - Flexible rhythm: monthly fee split weekly/fortnightly, timed to payer's payday
+- Parents add themselves from an invite link (choose rhythm, payday, language; agree to messages); owner approves
 - Pay from any bank via payment link; optional DebiCheck debit order
 - Account verification before collecting
 - Instant confirmation + auto-matching

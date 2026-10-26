@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_SMS_PARTS, smsParts, toGsm } from "@/messaging/sms";
-import { LANGUAGES, renderTemplate, templates, type FeeParams, type PaymentLink } from "@/messaging/templates";
+import { LANGUAGES, renderTemplate, templates, type FeeParams, type InviteLink, type PaymentLink } from "@/messaging/templates";
 import { plainName, smsDate, smsRand } from "@/messaging/templates/format";
 
 const FEE_TEMPLATES = ["payment_request", "payment_reminder", "balance_request"] as const;
@@ -81,6 +81,44 @@ describe("message templates", () => {
 
     it("never mentions late fees or penalties", () => {
       for (const key of FEE_TEMPLATES) expect(renderTemplate(lang, key, fee)).not.toMatch(/late fee|penalt|interest/i);
+    });
+  });
+
+  describe.each(LANGUAGES)("%s invite message", (lang) => {
+    const inviteLink = `https://mythusa.vercel.app/join/${"Ab3_-".repeat(8)}xyz` as InviteLink;
+    const invite = { business: "Sunshine Creche", child: "Lerato", link: inviteLink, expiresOn: "2026-11-02" };
+
+    it("names the business and child, has the one link, the expiry and the PIN warning", () => {
+      const body = renderTemplate(lang, "parent_invite", invite);
+      expect(body).toContain("Sunshine Creche");
+      expect(body).toContain("Lerato");
+      expect(body).toContain("02/11/2026");
+      expect(body).toContain("PIN");
+      expect(body.match(/https?:\/\//g)).toEqual(["https://"]);
+      expect(body).toContain(inviteLink);
+    });
+
+    it("is plain GSM text, and fits the part limit even with the longest names", () => {
+      const body = renderTemplate(lang, "parent_invite", invite);
+      expect(toGsm(body)).toBe(body);
+      expect(smsParts(body)).toBeLessThanOrEqual(2);
+      expect(smsParts(toGsm(renderTemplate(lang, "parent_invite", { ...invite, business: worst.business, child: worst.child })))).toBeLessThanOrEqual(
+        MAX_SMS_PARTS,
+      );
+    });
+
+    it("can't be turned into a link or address by a business or child name", () => {
+      const body = renderTemplate(lang, "parent_invite", {
+        ...invite,
+        business: "Pay at www.evil.example/x or https://evil.example",
+        child: "Lerato.co.za me@evil.example",
+      });
+      expect(body).not.toMatch(/www\.|evil\.example|me@/i);
+      expect(body.match(/https?:\/\//g)).toEqual(["https://"]);
+    });
+
+    it("never mentions an amount, late fees or penalties", () => {
+      expect(renderTemplate(lang, "parent_invite", invite)).not.toMatch(/R\d|late fee|penalt|interest/i);
     });
   });
 

@@ -10,6 +10,8 @@
 - Idempotency keys on all payment requests; append-only ledger
 - Bank details locked after verification; changes need fresh OTP
 - Fixed message templates; "Thusa will never ask for your PIN or password"
+- Invite links: 256-bit secret, hashed for lookup, single use, 7-day expiry; the parent never sends an amount;
+  answers are inert until the owner approves; consent kept append-only with its exact text
 - Security headers: HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy; CSRF protection
 - Rate limits on OTP and payment requests; daily caps per business
 - Secrets only in env / secrets manager; Gitleaks in CI

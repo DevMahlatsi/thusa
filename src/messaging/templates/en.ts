@@ -14,4 +14,6 @@ export const en: TemplateSet = {
     `A friendly reminder from ${businessName(p)}: ${childName(p)}'s fees of ${smsRand(p.amountCents)} were due on ${smsDate(p.dueDate)}. ${pay(p)} If you have paid, thank you. ${SAFETY}`,
   balance_request: (p) =>
     `${businessName(p)}: thank you for paying ${smsRand(p.paidCents)} for ${childName(p)}. The balance is ${smsRand(p.amountCents)}. ${pay(p)} ${SAFETY}`,
+  parent_invite: (p) =>
+    `${businessName(p)} uses Thusa to collect fees. Add your details for ${childName(p)} and choose when you pay: ${p.link} The link works once, until ${smsDate(p.expiresOn)}. ${SAFETY}`,
 };

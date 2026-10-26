@@ -22,11 +22,12 @@ describe.skipIf(!enabled)("integration: demo account reset", async () => {
 
   beforeEach(async () => {
     await db().auditLog.deleteMany();
-    await db().$executeRaw`TRUNCATE "LedgerEntry", "WebhookEvent"`;
+    await db().$executeRaw`TRUNCATE "LedgerEntry", "WebhookEvent", "MessagingConsent"`;
     await db().message.deleteMany();
     await db().balanceRequest.deleteMany();
     await db().collection.deleteMany();
     await db().schedule.deleteMany();
+    await db().payerInvite.deleteMany();
     await db().payer.deleteMany();
     await db().session.deleteMany();
     await db().user.deleteMany();
@@ -98,6 +99,29 @@ describe.skipIf(!enabled)("integration: demo account reset", async () => {
     // Saturday is that parent's payday, but archived parents are left alone by the daily job.
     await runDailyJobs(new Date("2026-10-24T08:00:00+02:00"));
     expect(await db().collection.count({ where: { businessId: old.id } })).toBe(0);
+  });
+
+  it("seeds one open invite link, and closes the old demo's links on the next reset", async () => {
+    const { DEMO_INVITE } = await import("@/lib/demo-seed");
+    const { joinInputSchema, submitInvite } = await import("@/lib/invites");
+    const first = (await resetDemoAccount(now))!;
+    expect(first.invites).toBe(1);
+    const seeded = await db().payerInvite.findMany({ where: { businessId: first.businessId } });
+    expect(seeded).toMatchObject([{ status: "OPEN", childName: DEMO_INVITE.childName, monthlyAmountCents: DEMO_INVITE.monthlyAmountCents }]);
+    expect(seeded[0]!.expiresAt.getTime()).toBeGreaterThan(now.getTime());
+
+    // A judge fills in one more link on the old demo, then the reset runs.
+    const user = await db().user.findUniqueOrThrow({ where: { phoneE164: DEMO } });
+    const { createInvite, inviteShare } = await import("@/lib/invites");
+    const used = await createInvite({ userId: user.id, businessId: first.businessId }, { ...DEMO_INVITE, phone: "+27821234567", parentAgreed: true }, now);
+    const token = inviteShare({ ...used, consent: null }, "x", "https://mythusa.vercel.app").link.split("/join/")[1]!;
+    const answers = { token, parentName: "A Judge", rhythm: "WEEKLY", payday: 5, language: "en", consent: true };
+    await submitInvite(joinInputSchema.parse(answers), now);
+
+    const second = (await resetDemoAccount(new Date("2026-10-25T07:00:00+02:00")))!;
+    expect(await db().payerInvite.findUniqueOrThrow({ where: { id: seeded[0]!.id } })).toMatchObject({ status: "CANCELLED", phoneEncrypted: null });
+    expect(await db().payerInvite.findUniqueOrThrow({ where: { id: used.id } })).toMatchObject({ status: "DECLINED", parentName: null, phoneEncrypted: null });
+    expect(await db().payerInvite.count({ where: { businessId: second.businessId, status: "OPEN" } })).toBe(1);
   });
 
   it("leaves other businesses alone", async () => {

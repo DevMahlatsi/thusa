@@ -20,13 +20,16 @@ export const MAX_AMOUNT_CENTS = 10_000_000;
 // messages to parents, so nothing that could carry a link or markup.
 const NAME = /^[\p{L}\p{M}' .-]+$/u;
 
-const nameSchema = (label: string) =>
-  z
+// label as it reads after "Enter", e.g. "the child's name" or "your name".
+export const nameSchema = (label: string) => {
+  const Label = label.charAt(0).toUpperCase() + label.slice(1);
+  return z
     .string()
     .trim()
-    .min(1, `Enter the ${label}`)
-    .max(80, `The ${label} is too long`)
-    .regex(NAME, `The ${label} can only contain letters, spaces, ' and -`);
+    .min(1, `Enter ${label}`)
+    .max(80, `${Label} is too long`)
+    .regex(NAME, `${Label} can only contain letters, spaces, ' and -`);
+};
 
 const isoDate = z
   .string()
@@ -56,8 +59,8 @@ export const scheduleSchema = z
   });
 
 export const payerInputSchema = z.strictObject({
-  parentName: nameSchema("parent's name"),
-  childName: nameSchema("child's name"),
+  parentName: nameSchema("the parent's name"),
+  childName: nameSchema("the child's name"),
   phone: saMobileSchema,
   // Null or left out: use the business's default language.
   language: z.enum(LANGUAGES).nullish().transform((v) => v ?? null),
