@@ -65,7 +65,7 @@ const COMPARE: { feature: string; marks: [Mark, Mark, Mark, Mark] }[] = [
   { feature: "Tracks part-payments without penalties", marks: ["no", "partly", "partly", "yes"] },
   { feature: "Payer can pay from any bank", marks: ["partly", "yes", "yes", "yes"] },
   { feature: "Matches payments automatically", marks: ["yes", "yes", "yes", "yes"] },
-  { feature: "Shows who to reward and who to support", marks: ["no", "no", "no", "yes"] },
+  { feature: "Flags reliable payers and those who need support", marks: ["no", "no", "no", "yes"] },
   { feature: "Built for informal crèches, no merchant account needed", marks: ["no", "no", "no", "yes"] },
 ];
 
@@ -239,7 +239,8 @@ export default async function Home() {
             </table>
           </div>
           <p className="muted small">
-            Based on publicly available information about typical products in each category, October 2026.
+            Comparison by product category (debit-order services, payment gateways, school fee apps), based on their
+            public product pages, October 2026.
           </p>
         </section>
 
@@ -261,7 +262,8 @@ export default async function Home() {
           <div className="section-intro">
             <h2 id="pricing-title">Simple pricing</h2>
             <p className="muted">
-              Plus 2.5% per successful collection (minimum R{NBSP}2, maximum R{NBSP}15). Parents pay nothing.
+              Crèches pay 2.5% per successful collection (min R{NBSP}2, max R{NBSP}15). Parents never pay Thusa
+              anything.
             </p>
           </div>
           <div className="plans">
